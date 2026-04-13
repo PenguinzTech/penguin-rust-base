@@ -24,6 +24,12 @@ ARG OXIDE_VERSION
 ARG STEAM_BUILD_ID
 ARG UMOD_PLUGINS_HASH
 
+# ─── Server defaults — override at runtime via -e or Helm env vars ───────────
+# Left blank so start.sh auto-configures based on available resources on first boot.
+# Set explicitly to skip auto-detection: docker run -e RUST_SERVER_WORLDSIZE=2000
+ENV RUST_SERVER_WORLDSIZE=""
+ENV RUST_SERVER_MAXPLAYERS=""
+
 # SteamCMD requires 32-bit glibc compatibility layer.
 # Create non-root service account before installing files so ownership is clean.
 RUN dpkg --add-architecture i386 && \

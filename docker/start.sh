@@ -54,6 +54,74 @@ rm -rf "${OXIDE_DATA_IMAGE}"
 ln -sfT "${OXIDE_DATA_PVC}" "${OXIDE_DATA_IMAGE}"
 echo "[startup] Oxide data directory linked to PVC (${OXIDE_DATA_PVC})"
 
+# ─── Auto-configure server for available resources ────────────────────────────
+# On first deployment (no lock file), detects available CPUs and memory and picks
+# sensible worldSize + maxPlayers defaults. Skips on subsequent restarts so Rust's
+# on-disk world state is never invalidated by a changed worldSize.
+# To re-trigger detection: delete the lock file and restart.
+#
+# Tier table (memory-primary; CPU count used as secondary floor):
+#   < 4GB,  ≥1 CPU  → worldSize=750,  maxPlayers=10
+#   4–7GB,  ≥1 CPU  → worldSize=2000, maxPlayers=40
+#   8–15GB, ≥2 CPUs → worldSize=3000, maxPlayers=75
+#   16–31GB,≥4 CPUs → worldSize=4000, maxPlayers=100
+#   32+GB,  ≥4 CPUs → worldSize=4500, maxPlayers=150
+#
+# Env vars RUST_SERVER_WORLDSIZE and RUST_SERVER_MAXPLAYERS always win when set.
+AUTOCONFIG_LOCK="/steamcmd/rust/server/${RUST_SERVER_IDENTITY:-rust_server}/.auto-config.lock"
+
+if [ ! -f "${AUTOCONFIG_LOCK}" ]; then
+    MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    MEM_GB=$((MEM_KB / 1024 / 1024))
+    CPUS=$(nproc)
+    echo "[startup] Auto-config: detected ${CPUS} CPU(s), ${MEM_GB}GB RAM"
+
+    # Select tier — drop one tier if CPU count is below the floor
+    if   [ "$MEM_GB" -ge 32 ] && [ "$CPUS" -ge 4 ]; then
+        AUTO_WORLDSIZE=4500; AUTO_MAXPLAYERS=150
+    elif [ "$MEM_GB" -ge 16 ] && [ "$CPUS" -ge 4 ]; then
+        AUTO_WORLDSIZE=4000; AUTO_MAXPLAYERS=100
+    elif [ "$MEM_GB" -ge 8  ] && [ "$CPUS" -ge 2 ]; then
+        AUTO_WORLDSIZE=3000; AUTO_MAXPLAYERS=75
+    elif [ "$MEM_GB" -ge 4  ] && [ "$CPUS" -ge 1 ]; then
+        AUTO_WORLDSIZE=2000; AUTO_MAXPLAYERS=40
+    else
+        AUTO_WORLDSIZE=750;  AUTO_MAXPLAYERS=10
+    fi
+
+    # Apply only when not explicitly set by the operator
+    APPLIED_WORLDSIZE="${RUST_SERVER_WORLDSIZE:-}"
+    APPLIED_MAXPLAYERS="${RUST_SERVER_MAXPLAYERS:-}"
+
+    if [ -z "${RUST_SERVER_WORLDSIZE:-}" ]; then
+        export RUST_SERVER_WORLDSIZE="${AUTO_WORLDSIZE}"
+        APPLIED_WORLDSIZE="${AUTO_WORLDSIZE} (auto)"
+    else
+        APPLIED_WORLDSIZE="${RUST_SERVER_WORLDSIZE} (explicit)"
+    fi
+
+    if [ -z "${RUST_SERVER_MAXPLAYERS:-}" ]; then
+        export RUST_SERVER_MAXPLAYERS="${AUTO_MAXPLAYERS}"
+        APPLIED_MAXPLAYERS="${AUTO_MAXPLAYERS} (auto)"
+    else
+        APPLIED_MAXPLAYERS="${RUST_SERVER_MAXPLAYERS} (explicit)"
+    fi
+
+    echo "[startup] Auto-config: worldSize=${APPLIED_WORLDSIZE}, maxPlayers=${APPLIED_MAXPLAYERS}"
+
+    # Write lock file — records detected hardware and applied values for reference
+    mkdir -p "$(dirname "${AUTOCONFIG_LOCK}")"
+    printf '# Auto-config lock — delete this file to re-trigger resource detection on next start.\n' > "${AUTOCONFIG_LOCK}"
+    printf '# Generated: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "${AUTOCONFIG_LOCK}"
+    printf 'DETECTED_CPUS=%s\n' "${CPUS}" >> "${AUTOCONFIG_LOCK}"
+    printf 'DETECTED_MEM_GB=%s\n' "${MEM_GB}" >> "${AUTOCONFIG_LOCK}"
+    printf 'AUTO_WORLDSIZE=%s\n' "${AUTO_WORLDSIZE}" >> "${AUTOCONFIG_LOCK}"
+    printf 'AUTO_MAXPLAYERS=%s\n' "${AUTO_MAXPLAYERS}" >> "${AUTOCONFIG_LOCK}"
+    printf 'APPLIED_WORLDSIZE=%s\n' "${RUST_SERVER_WORLDSIZE}" >> "${AUTOCONFIG_LOCK}"
+    printf 'APPLIED_MAXPLAYERS=%s\n' "${RUST_SERVER_MAXPLAYERS}" >> "${AUTOCONFIG_LOCK}"
+    echo "[startup] Auto-config locked: ${AUTOCONFIG_LOCK}"
+fi
+
 # ─── Runtime plugin toggle ───────────────────────────────────────────────────
 # Disable specific plugins at runtime without rebuilding the image.
 # OXIDE_DISABLED_PLUGINS=Vanish,BGrade  (comma-separated, with or without .cs)
