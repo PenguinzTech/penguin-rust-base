@@ -1,0 +1,116 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# Penguin Rust Base — Community Game Server Image
+#
+# Custom-built from Debian bookworm. Game files (SteamCMD app 258550) and
+# Oxide mods are baked in at build time — no first-boot download wait.
+#
+# CI rebuilds automatically when Oxide or Steam build ID changes (every 4h check).
+# Layer ordering is intentional: Steam layer is ~6GB and changes infrequently;
+# Oxide layer is small and changes often. Oxide sits above Steam so the
+# registry-side layer cache reuses the Steam download on Oxide-only updates.
+#
+# Build args:
+#   OXIDE_VERSION  - Oxide.Rust release tag (e.g. 2.0.7271) — injected by CI
+#   STEAM_BUILD_ID - Steam build ID for OCI label tracking — informational only
+# =============================================================================
+
+ARG OXIDE_VERSION
+ARG STEAM_BUILD_ID
+
+FROM debian:bookworm-slim
+
+ARG OXIDE_VERSION
+ARG STEAM_BUILD_ID
+ARG UMOD_PLUGINS_HASH
+
+# SteamCMD requires 32-bit glibc compatibility layer.
+# Create non-root service account before installing files so ownership is clean.
+RUN dpkg --add-architecture i386 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        lib32gcc-s1 \
+        numactl \
+        procps \
+        unzip \
+    && rm -rf /var/lib/apt/lists/* && \
+    groupadd -r rustserver && \
+    useradd -r -g rustserver -u 1000 -m -d /home/rustserver rustserver
+
+# Install SteamCMD under /steamcmd — rustserver will own it
+RUN mkdir -p /steamcmd && \
+    curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" \
+    | tar zxvf - -C /steamcmd && \
+    chown -R rustserver:rustserver /steamcmd
+
+# ─── Steam layer (~6GB) ──────────────────────────────────────────────────────
+# Bake Rust dedicated server game files at build time.
+# Run as rustserver so all game files are already owned correctly.
+# PVC is mounted at /steamcmd/rust/server (saves only) — game files stay in image layer.
+USER rustserver
+RUN /steamcmd/steamcmd.sh \
+    +login anonymous \
+    +force_install_dir /steamcmd/rust \
+    +app_update 258550 validate \
+    +quit
+
+# SteamAPI_Init searches ~/.steam/sdk64/steamclient.so (hardcoded Valve path).
+# SteamCMD installs the library to /steamcmd/linux64/ — symlink bridges the two.
+# Without this, Steam server init fails and the server exits cleanly (exit 0).
+RUN mkdir -p /home/rustserver/.steam/sdk64 && \
+    ln -s /steamcmd/linux64/steamclient.so /home/rustserver/.steam/sdk64/steamclient.so
+
+# ─── Oxide layer (~50MB) ─────────────────────────────────────────────────────
+# Sits above Steam layer so it rebuilds independently on Oxide releases.
+# -o overwrites game-managed files (e.g. Assembly-CSharp.dll) without prompting.
+RUN echo "Downloading Oxide ${OXIDE_VERSION}..." && \
+    curl -fsSL \
+    "https://github.com/OxideMod/Oxide.Rust/releases/download/${OXIDE_VERSION}/Oxide.Rust-linux.zip" \
+    -o /tmp/oxide.zip && \
+    unzip -o /tmp/oxide.zip -d /steamcmd/rust && \
+    rm /tmp/oxide.zip
+
+# ─── umod.org plugin layer ───────────────────────────────────────────────────
+# Downloaded fresh at build time from umod.org — always gets latest versions.
+# UMOD_PLUGINS_HASH busts this layer's cache when any plugin version changes.
+# Registry: docker/umod-plugins.txt (slug|FileName.cs, one per line).
+# Sits above the base layers so umod-only rebuilds reuse the Steam cache.
+COPY umod-plugins.txt /tmp/umod-plugins.txt
+RUN while IFS='|' read -r slug filename; do \
+      case "$slug" in '#'*|'') continue ;; esac; \
+      curl -fsSL "https://umod.org/plugins/${slug}.cs" \
+        -o "/steamcmd/rust/oxide/plugins/${filename}" \
+      || echo "WARNING: failed to download ${slug} — skipping"; \
+    done < /tmp/umod-plugins.txt && \
+    rm /tmp/umod-plugins.txt
+
+# ─── Built-in plugins ────────────────────────────────────────────────────────
+# AutoAdmin is baked into the base image so every downstream image gets
+# automatic permission provisioning and admin group management.
+COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
+
+# ─── Startup script ──────────────────────────────────────────────────────────
+COPY --chown=rustserver:rustserver start.sh /start.sh
+RUN chmod +x /start.sh
+
+# ─── Build metadata ──────────────────────────────────────────────────────────
+# Bake build args into a file so start.sh can source them at runtime.
+# ARGs are build-time only and don't survive into the container environment.
+# Must run as root — rustserver (UID 1000) cannot write to /etc.
+USER root
+RUN echo "OXIDE_VERSION=${OXIDE_VERSION}" > /etc/rust-build-info && \
+    echo "STEAM_BUILD_ID=${STEAM_BUILD_ID}" >> /etc/rust-build-info
+USER rustserver
+
+# ─── OCI labels ──────────────────────────────────────────────────────────────
+# Consumed by CI workflow (skopeo inspect) to detect whether a rebuild is needed.
+LABEL org.opencontainers.image.source="https://github.com/PenguinzTech/penguin-rust-base" \
+      org.opencontainers.image.description="Rust dedicated server with Oxide + umod plugins — community base image" \
+      dev.penguinztech.oxide-version="${OXIDE_VERSION}" \
+      dev.penguinztech.steam-build-id="${STEAM_BUILD_ID}" \
+      dev.penguinztech.umod-plugins-hash="${UMOD_PLUGINS_HASH}"
+
+WORKDIR /steamcmd/rust
+ENTRYPOINT ["/start.sh"]

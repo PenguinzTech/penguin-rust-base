@@ -1,0 +1,82 @@
+name: Check umod plugin updates
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily
+  workflow_dispatch:       # manual trigger
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      actions: write        # needed to dispatch build-image.yml
+
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Normalize image name to lowercase
+        id: image
+        env:
+          RAW_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: echo "lower=${RAW_IMAGE_NAME,,}" >> $GITHUB_OUTPUT
+
+      - name: Compute current umod plugin versions hash
+        id: umod
+        run: |
+          VERSIONS=""
+          while IFS='|' read -r slug filename; do
+            case "$slug" in '#'*|'') continue ;; esac
+            ver=$(curl -fsSL "https://umod.org/plugins/${slug}.json" \
+                  | jq -r '.latest_release_version // .version // "unknown"' 2>/dev/null \
+                  || echo "unknown")
+            VERSIONS="${VERSIONS}${slug}:${ver},"
+          done < docker/umod-plugins.txt
+          HASH=$(echo -n "$VERSIONS" | sha256sum | cut -d' ' -f1)
+          echo "hash=${HASH}" >> $GITHUB_OUTPUT
+          echo "versions=${VERSIONS}" >> $GITHUB_OUTPUT
+          echo "Computed umod hash: ${HASH}"
+          echo "Plugin versions: ${VERSIONS}"
+
+      - name: Get last built umod hash from image label
+        id: last
+        env:
+          OUR_IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.lower }}:latest
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LAST=$(skopeo inspect \
+            --creds "${GITHUB_ACTOR}:${GITHUB_TOKEN}" \
+            "docker://${OUR_IMAGE}" 2>/dev/null \
+            | jq -r '.Labels["dev.penguinztech.umod-plugins-hash"] // ""' \
+            || echo "")
+          echo "hash=${LAST}" >> $GITHUB_OUTPUT
+          echo "Last image umod hash: ${LAST:-none}"
+
+      - name: Dispatch rebuild if plugins changed
+        if: steps.umod.outputs.hash != steps.last.outputs.hash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_HASH: ${{ steps.umod.outputs.hash }}
+          OLD_HASH: ${{ steps.last.outputs.hash }}
+          VERSIONS: ${{ steps.umod.outputs.versions }}
+        run: |
+          echo "umod plugins changed — dispatching build"
+          echo "Old hash: ${OLD_HASH}"
+          echo "New hash: ${NEW_HASH}"
+          echo "Plugin versions: ${VERSIONS}"
+          gh workflow run build-image.yml \
+            --field force_rebuild=true
+
+      - name: No changes
+        if: steps.umod.outputs.hash == steps.last.outputs.hash
+        env:
+          HASH: ${{ steps.umod.outputs.hash }}
+        run: |
+          echo "All umod plugins up to date — no rebuild needed."
+          echo "Hash: ${HASH}"

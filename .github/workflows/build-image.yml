@@ -1,0 +1,216 @@
+name: Build & Push Rust Server Base Image
+
+on:
+  # Poll every 4 hours for Oxide and Steam updates
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild even if no upstream changes'
+        required: false
+        default: 'false'
+        type: boolean
+  repository_dispatch:
+    types: [force-rebuild]
+
+env:
+  REGISTRY: ghcr.io
+  # github.repository preserves case — GHCR requires lowercase; jobs normalize via step.
+  IMAGE_NAME: ${{ github.repository }}
+  RUST_APP_ID: "258550"
+
+jobs:
+  check-updates:
+    name: Check Oxide + Steam for updates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    outputs:
+      should_build: ${{ steps.compare.outputs.should_build }}
+      oxide_version: ${{ steps.oxide.outputs.version }}
+      steam_build_id: ${{ steps.steam.outputs.build_id }}
+      umod_plugins_hash: ${{ steps.umod.outputs.hash }}
+      image_name_lower: ${{ steps.image.outputs.lower }}
+
+    steps:
+      - name: Normalize image name to lowercase
+        id: image
+        env:
+          RAW_IMAGE_NAME: ${{ env.IMAGE_NAME }}
+        run: echo "lower=${RAW_IMAGE_NAME,,}" >> $GITHUB_OUTPUT
+
+      - name: Checkout (needed for umod-plugins.txt)
+        uses: actions/checkout@v4
+
+      - name: Compute umod plugins hash
+        id: umod
+        run: |
+          VERSIONS=""
+          while IFS='|' read -r slug filename; do
+            case "$slug" in '#'*|'') continue ;; esac
+            ver=$(curl -fsSL "https://umod.org/plugins/${slug}.json" \
+                  | jq -r '.latest_release_version // .version // "unknown"' 2>/dev/null \
+                  || echo "unknown")
+            VERSIONS="${VERSIONS}${slug}:${ver},"
+          done < docker/umod-plugins.txt
+          HASH=$(echo -n "$VERSIONS" | sha256sum | cut -d' ' -f1)
+          echo "hash=${HASH}" >> $GITHUB_OUTPUT
+          echo "umod plugins hash: ${HASH}"
+
+      - name: Get latest Oxide.Rust release version
+        id: oxide
+        run: |
+          VERSION=$(curl -sf "https://api.github.com/repos/OxideMod/Oxide.Rust/releases/latest" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            | jq -r '.tag_name')
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "ERROR: Failed to fetch Oxide release version" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Latest Oxide version: ${VERSION}"
+
+      - name: Get latest Rust dedicated server Steam build ID
+        id: steam
+        env:
+          APP_ID: ${{ env.RUST_APP_ID }}
+        run: |
+          BUILD_ID=$(curl -sf "https://api.steamcmd.net/v1/info/${APP_ID}" \
+            | jq -r ".data[\"${APP_ID}\"].depots.branches.public.buildid")
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then
+            echo "ERROR: Failed to fetch Steam build ID" >&2
+            exit 1
+          fi
+          echo "build_id=${BUILD_ID}" >> $GITHUB_OUTPUT
+          echo "Latest Steam build ID: ${BUILD_ID}"
+
+      - name: Get versions from our last built image
+        id: ours
+        env:
+          OUR_IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.lower }}:latest
+        run: |
+          # skopeo inspects image config without pulling all layers (~KB vs ~6GB)
+          LABELS=$(skopeo inspect \
+            --creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
+            "docker://${OUR_IMAGE}" 2>/dev/null \
+            | jq -r '.Labels // {}' \
+            || echo '{}')
+
+          LAST_OXIDE=$(echo "$LABELS" | jq -r '."dev.penguinztech.oxide-version" // empty')
+          LAST_STEAM=$(echo "$LABELS" | jq -r '."dev.penguinztech.steam-build-id" // empty')
+
+          echo "last_oxide=${LAST_OXIDE:-none}" >> $GITHUB_OUTPUT
+          echo "last_steam=${LAST_STEAM:-none}" >> $GITHUB_OUTPUT
+          echo "Last image — Oxide: ${LAST_OXIDE:-none}, Steam: ${LAST_STEAM:-none}"
+
+      - name: Determine if rebuild needed
+        id: compare
+        env:
+          OXIDE_VERSION: ${{ steps.oxide.outputs.version }}
+          STEAM_BUILD_ID: ${{ steps.steam.outputs.build_id }}
+          LAST_OXIDE: ${{ steps.ours.outputs.last_oxide }}
+          LAST_STEAM: ${{ steps.ours.outputs.last_steam }}
+          FORCE_REBUILD: ${{ inputs.force_rebuild }}
+        run: |
+          if [ "$FORCE_REBUILD" = "true" ]; then
+            echo "Force rebuild requested."
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          elif [ "$LAST_OXIDE" = "none" ] || [ "$LAST_STEAM" = "none" ]; then
+            echo "No existing image found — first build."
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          elif [ "$LAST_OXIDE" != "$OXIDE_VERSION" ]; then
+            echo "Oxide updated: ${LAST_OXIDE} -> ${OXIDE_VERSION}"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          elif [ "$LAST_STEAM" != "$STEAM_BUILD_ID" ]; then
+            echo "Steam updated: ${LAST_STEAM} -> ${STEAM_BUILD_ID}"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "No updates — Oxide ${OXIDE_VERSION}, Steam ${STEAM_BUILD_ID} already built."
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build & push
+    runs-on: ubuntu-latest
+    needs: check-updates
+    if: needs.check-updates.outputs.should_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unix epoch timestamp
+        id: epoch
+        run: echo "ts=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ needs.check-updates.outputs.image_name_lower }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.epoch.outputs.ts }}
+          labels: |
+            dev.penguinztech.oxide-version=${{ needs.check-updates.outputs.oxide_version }}
+            dev.penguinztech.steam-build-id=${{ needs.check-updates.outputs.steam_build_id }}
+            dev.penguinztech.umod-plugins-hash=${{ needs.check-updates.outputs.umod_plugins_hash }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            OXIDE_VERSION=${{ needs.check-updates.outputs.oxide_version }}
+            STEAM_BUILD_ID=${{ needs.check-updates.outputs.steam_build_id }}
+            UMOD_PLUGINS_HASH=${{ needs.check-updates.outputs.umod_plugins_hash }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ needs.check-updates.outputs.image_name_lower }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ needs.check-updates.outputs.image_name_lower }}:buildcache,mode=max
+          platforms: linux/amd64
+
+      - name: Summary
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ needs.check-updates.outputs.image_name_lower }}
+          OXIDE_VERSION: ${{ needs.check-updates.outputs.oxide_version }}
+          STEAM_BUILD_ID: ${{ needs.check-updates.outputs.steam_build_id }}
+          TS: ${{ steps.epoch.outputs.ts }}
+        run: |
+          echo "### Image published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry:** \`${IMAGE_REF}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Oxide version:** \`${OXIDE_VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Steam build ID:** \`${STEAM_BUILD_ID}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tags:** \`latest\`, \`${TS}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **umod plugins hash:** \`${{ needs.check-updates.outputs.umod_plugins_hash }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Base image published and ready for use by penguin-rust." >> $GITHUB_STEP_SUMMARY
+
+      - name: Trigger private image rebuild
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.PENGUIN_RUST_DISPATCH_PAT }}
+        run: |
+          gh api repos/PenguinzTech/penguin-rust/dispatches \
+            --method POST \
+            -f event_type=base-image-updated \
+            -f client_payload='{"base_image_tag":"${{ steps.epoch.outputs.ts }}"}'

@@ -1,0 +1,15 @@
+# umod.org plugin registry — slug|FileName.cs
+# Plugins here are downloaded at image build time from https://umod.org/plugins/{slug}.cs
+# Add a line here to include a new umod plugin; remove a line to drop it.
+# Plugins without a public update API (e.g. lone.design) live in a private overlay image.
+admin-utilities|AdminUtilities.cs
+bgrade|BGrade.cs
+copy-paste|CopyPaste.cs
+vanish|Vanish.cs
+remover-tool|RemoverTool.cs
+unburnable-meat|UnburnableMeat.cs
+vehicle-decay-protection|VehicleDecayProtection.cs
+night-lantern|NightLantern.cs
+truepve|TruePVE.cs
+stack-size-controller|StackSizeController.cs
+whitelist|Whitelist.cs

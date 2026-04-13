@@ -1,0 +1,104 @@
+name: Security Scanning
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Weekly on Sundays at 02:00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  # Lint Dockerfile for security issues and best practices
+  # Catches base image vulnerabilities, insecure patterns, rootless violations
+  lint-dockerfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Lint Dockerfile with hadolint
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4a99b59a
+        with:
+          dockerfile: docker/Dockerfile
+          failure-threshold: warning
+
+  # Lint shell scripts for syntax and security issues
+  # Checks for unquoted variables, unsafe patterns, shellcheck violations
+  lint-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint shell scripts
+        run: shellcheck docker/start.sh
+
+  # Scan repo for hardcoded secrets, API keys, credentials
+  # Scans all files except .cs plugins (third-party, not our code)
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets with gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c3
+
+  # Scan IaC (Dockerfiles, shell scripts) for security violations
+  # Uses Checkov to check Docker security practices (CKV_DOCKER_* only)
+  # Excludes .cs plugin files (third-party code, not our responsibility)
+  iac-security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Scan IaC with Checkov (Docker checks only)
+        uses: bridgecrewio/checkov-action@3b3986f769cc2af94e4ba4e7a3c80b3e89bb0db3
+        with:
+          directory: docker/
+          check: CKV_DOCKER_1,CKV_DOCKER_2,CKV_DOCKER_3,CKV_DOCKER_4,CKV_DOCKER_5,CKV_DOCKER_6,CKV_DOCKER_7,CKV_DOCKER_8,CKV_DOCKER_9,CKV_DOCKER_10,CKV_DOCKER_11,CKV_DOCKER_12,CKV_DOCKER_13,CKV_DOCKER_14,CKV_DOCKER_15,CKV_DOCKER_16,CKV_DOCKER_17,CKV_DOCKER_18,CKV_DOCKER_19,CKV_DOCKER_20,CKV_DOCKER_21,CKV_DOCKER_22
+          soft-fail: false
+
+  # Scan built Docker image for vulnerability findings (CRITICAL, HIGH severity only)
+  # Only runs on push to main (image must be built and pushed to GHCR first)
+  # Does not run on PRs (image not available yet)
+  trivy-image:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan image with Trivy
+        uses: aquasec/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8
+        with:
+          image-ref: ghcr.io/penguintechinc/penguin-rust-base:latest
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@b611370bb5703a7efb587f9d136db6ce476cf3a9
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
