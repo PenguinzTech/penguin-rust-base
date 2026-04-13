@@ -148,6 +148,11 @@ then locks the result so restarts never change a live world.
 > WaterBases) add meaningful memory overhead — consider stepping down one tier or
 > increasing your memory allocation if running a plugin-heavy server.
 
+> **CPU provisioning note:** Auto-config reads the CPUs visible to the container at first boot.
+> For best results, provision your full core budget at deploy time (world gen is multi-threaded
+> and uses all cores). You can narrow the game loop later with `RUST_CPU_CORES` — see
+> [CPU Pinning](#cpu-pinning-two-phase) below.
+
 📖 **Full details:** [docs/auto-config.md](docs/auto-config.md) — lock file behaviour,
 re-triggering detection, and how explicit env vars override auto-detection.
 
@@ -483,15 +488,41 @@ Forward **both UDP and TCP** on port 28015:
 
 ## Performance Tuning
 
-### CPU Pinning
+### CPU Pinning (Two-Phase)
 
-Pin the game loop to specific cores for predictable performance:
+Rust uses two distinct CPU profiles during its lifetime:
+
+- **World generation** — multi-threaded (navmesh, terrain, occlusion grid). Benefits from
+  all available cores. Restricting CPUs here wastes significant startup time.
+- **Game loop** — almost entirely single-threaded. Pinning to dedicated cores eliminates
+  scheduler jitter and reduces player desync on busy servers.
+
+The startup script handles this automatically: world gen runs with no CPU restriction, then
+after the server opens UDP port 28015, `taskset` pins `RustDedicated` to the cores specified
+in `RUST_CPU_CORES`.
+
+**Recommendation:** provision your container/VM with the full core budget you want for world
+gen, then let `RUST_CPU_CORES` narrow the game loop to dedicated cores:
 
 ```bash
--e RUST_CPU_CORES="0,1,2,3"
+# Kubernetes — give the pod 4 cores, pin game loop to 2 dedicated cores
+resources:
+  requests:
+    cpu: "4"
+  limits:
+    cpu: "4"
+env:
+  - name: RUST_CPU_CORES
+    value: "0,1"
 ```
 
-Use even-numbered cores on high-core-count systems (NUMA awareness).
+```bash
+# Docker — same principle
+docker run ... --cpus="4" -e RUST_CPU_CORES="0,1" ...
+```
+
+Leave `RUST_CPU_CORES` empty to let the scheduler assign cores freely (fine for most setups).
+Use even-numbered cores on multi-socket NUMA systems to keep the game loop on one NUMA node.
 
 ### Memory Tuning
 
