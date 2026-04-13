@@ -172,15 +172,27 @@ if [ -n "${RUST_RCON_PASSWORD:-}" ]; then
     RCON_PASSWORD_ARG="+rcon.password ${RUST_RCON_PASSWORD}"
 fi
 
+# ─── RCON helper ─────────────────────────────────────────────────────────────
+# Sends a single command to the server via WebSocket RCON (rcon.web 1).
+# Requires websocat (installed in image) and RUST_RCON_PASSWORD to be set.
+# Silently no-ops if either is missing — never blocks server startup.
+send_rcon() {
+    local cmd="$1"
+    [ -z "${RUST_RCON_PASSWORD:-}" ] && return 0
+    command -v websocat >/dev/null 2>&1 || return 0
+    printf '{"Identifier":1,"Message":"%s","Name":"start.sh"}\n' "${cmd}" | \
+        websocat -n1 --no-close --timeout 5 \
+        "ws://127.0.0.1:${RUST_RCON_PORT:-28016}/${RUST_RCON_PASSWORD}" \
+        >/dev/null 2>&1 || true
+}
+
 # ─── SIGTERM handler ─────────────────────────────────────────────────────────
 # K8s sends SIGTERM before SIGKILL. Rust needs time to flush world state.
 # terminationGracePeriodSeconds in values.yaml must be >= server.saveinterval.
 _term() {
     echo "[startup] SIGTERM received — sending save + quit to server..."
     # If RCON password is set, use it to gracefully save before exit
-    if [ -n "${RUST_RCON_PASSWORD:-}" ] && command -v nc &>/dev/null; then
-        echo "server.save" | nc -q1 127.0.0.1 "${RUST_RCON_PORT:-28016}" 2>/dev/null || true
-    fi
+    send_rcon "server.save"
     kill -TERM "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
 }
@@ -231,6 +243,48 @@ if [ -n "${RUST_CPU_CORES:-}" ]; then
             taskset -cp "${RUST_CPU_CORES}" "$SERVER_PID" 2>/dev/null
             echo "[startup] Game-loop CPU pinned to cores ${RUST_CPU_CORES}"
         fi
+    ) &
+fi
+
+# ─── Phase 2b: periodic maxPlayers adjustment based on runtime RSS ────────────
+# After world gen completes, measures actual RustDedicated RSS and adjusts
+# server.maxplayers via RCON. Post-world-gen RSS is a far better signal than
+# available memory at boot — it captures navmesh, plugin heap, and entity data.
+# Persists the value via config.save so it survives server reloads.
+#
+# RSS tier table (post-world-gen; more conservative than boot-time tiers):
+#   < 4GB   → 10 players     4–5GB  → 40 players
+#   6–9GB   → 75 players     10–15GB → 100 players    16+GB → 150 players
+#
+# Requires RUST_RCON_PASSWORD. Interval: RUST_MAXPLAYERS_CHECK_INTERVAL
+# (default 1800s / 30 min). Set to 0 to disable.
+_MP_INTERVAL="${RUST_MAXPLAYERS_CHECK_INTERVAL:-1800}"
+if [ -n "${RUST_RCON_PASSWORD:-}" ] && [ "${_MP_INTERVAL}" -gt 0 ]; then
+    (
+        # Wait for the game port to open (world gen complete)
+        while ! grep -q '00000000:6D6F' /proc/net/udp 2>/dev/null; do
+            sleep 5
+        done
+        echo "[autoconfig] World gen complete — waiting 60s before first maxPlayers adjustment..."
+        sleep 60
+
+        while kill -0 "$SERVER_PID" 2>/dev/null; do
+            RSS_KB=$(awk '/VmRSS/{print $2}' /proc/$SERVER_PID/status 2>/dev/null || echo 0)
+            RSS_GB=$((RSS_KB / 1024 / 1024))
+
+            if   [ "$RSS_GB" -ge 16 ]; then NEW_MP=150
+            elif [ "$RSS_GB" -ge 10 ]; then NEW_MP=100
+            elif [ "$RSS_GB" -ge 6  ]; then NEW_MP=75
+            elif [ "$RSS_GB" -ge 4  ]; then NEW_MP=40
+            else                            NEW_MP=10
+            fi
+
+            echo "[autoconfig] RSS ${RSS_GB}GB → server.maxplayers ${NEW_MP}"
+            send_rcon "server.maxplayers ${NEW_MP}"
+            send_rcon "config.save"
+
+            sleep "${_MP_INTERVAL}"
+        done
     ) &
 fi
 

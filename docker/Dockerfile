@@ -31,6 +31,7 @@ ENV RUST_SERVER_WORLDSIZE=""
 ENV RUST_SERVER_MAXPLAYERS=""
 
 # SteamCMD requires 32-bit glibc compatibility layer.
+# websocat enables WebSocket RCON commands from start.sh (server.maxplayers, config.save).
 # Create non-root service account before installing files so ownership is clean.
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
@@ -41,6 +42,7 @@ RUN dpkg --add-architecture i386 && \
         numactl \
         procps \
         unzip \
+        websocat \
     && rm -rf /var/lib/apt/lists/* && \
     groupadd -r rustserver && \
     useradd -r -g rustserver -u 1000 -m -d /home/rustserver rustserver
