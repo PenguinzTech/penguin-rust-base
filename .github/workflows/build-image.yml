@@ -4,6 +4,14 @@ on:
   # Poll every 4 hours for Oxide and Steam updates
   schedule:
     - cron: '0 */4 * * *'
+  # Rebuild immediately when image-affecting code lands on main.
+  # Scoped to paths that change image contents — docs/README/security.yml
+  # changes don't require a new image.
+  push:
+    branches: [main]
+    paths:
+      - 'docker/**'
+      - '.github/workflows/build-image.yml'
   workflow_dispatch:
     inputs:
       force_rebuild:
@@ -114,9 +122,13 @@ jobs:
           LAST_OXIDE: ${{ steps.ours.outputs.last_oxide }}
           LAST_STEAM: ${{ steps.ours.outputs.last_steam }}
           FORCE_REBUILD: ${{ inputs.force_rebuild }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           if [ "$FORCE_REBUILD" = "true" ]; then
             echo "Force rebuild requested."
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          elif [ "$EVENT_NAME" = "push" ]; then
+            echo "Push event — image-affecting code changed, rebuilding."
             echo "should_build=true" >> $GITHUB_OUTPUT
           elif [ "$LAST_OXIDE" = "none" ] || [ "$LAST_STEAM" = "none" ]; then
             echo "No existing image found — first build."
