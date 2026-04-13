@@ -182,10 +182,10 @@ COPY --chown=rustserver:rustserver umod-plugins.txt /etc/penguin-rust-plugins/um
 # fail the build rather than ship a bad plugin.
 # Plugin staging (copy to oxide/plugins/) is deferred to start.sh so RUST_PLUGINS
 # env var can control which plugins are loaded at runtime.
-# hadolint ignore=DL3003
 # DL3003 (use WORKDIR): intentional — this is a single RUN with bounded, local cd
 # purely to iterate slugs; WORKDIR would leave us in /etc/penguin-rust-plugins/per-plugin
 # for subsequent layers, which is not what we want.
+# hadolint ignore=DL3003
 RUN set -eu; \
     cd /etc/penguin-rust-plugins/per-plugin; \
     for dir in */; do \
