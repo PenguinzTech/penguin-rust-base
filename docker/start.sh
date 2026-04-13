@@ -164,13 +164,30 @@ if [ -n "${RUST_ADMIN_STEAMIDS:-}" ]; then
 fi
 
 # ─── RCON password ───────────────────────────────────────────────────────────
-# Rust's Bootstrap.Init_Tier0 calls String.Replace(password, "***") for log
-# sanitisation. Passing an empty string throws ArgumentException. Skip the
-# +rcon.password flag entirely if no password is set — RCON will be disabled.
-RCON_PASSWORD_ARG=""
-if [ -n "${RUST_RCON_PASSWORD:-}" ]; then
-    RCON_PASSWORD_ARG="+rcon.password ${RUST_RCON_PASSWORD}"
+# If RUST_RCON_PASSWORD is not set, generate a random 31-char alphanumeric
+# password and persist it to the PVC so it survives restarts. On subsequent
+# boots the saved password is read back, keeping WebRCON accessible without
+# requiring the operator to set anything explicitly.
+# Password file: /steamcmd/rust/server/<identity>/.rcon.pw (on PVC)
+RCON_PW_FILE="/steamcmd/rust/server/${RUST_SERVER_IDENTITY:-rust_server}/.rcon.pw"
+if [ -z "${RUST_RCON_PASSWORD:-}" ]; then
+    if [ -f "${RCON_PW_FILE}" ]; then
+        RUST_RCON_PASSWORD=$(cat "${RCON_PW_FILE}")
+        echo "[startup] RCON password loaded from ${RCON_PW_FILE}"
+    else
+        RUST_RCON_PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 31)
+        mkdir -p "$(dirname "${RCON_PW_FILE}")"
+        printf '%s\n' "${RUST_RCON_PASSWORD}" > "${RCON_PW_FILE}"
+        chmod 600 "${RCON_PW_FILE}"
+        echo "[startup] RCON password generated and saved to ${RCON_PW_FILE}"
+    fi
+    export RUST_RCON_PASSWORD
 fi
+
+# Rust's Bootstrap.Init_Tier0 calls String.Replace(password, "***") for log
+# sanitisation. Passing an empty string throws ArgumentException — always set
+# by this point (either explicit env var or generated above).
+RCON_PASSWORD_ARG="+rcon.password ${RUST_RCON_PASSWORD}"
 
 # ─── RCON helper ─────────────────────────────────────────────────────────────
 # Sends a single command to the server via WebSocket RCON (rcon.web 1).
