@@ -204,13 +204,3 @@ jobs:
           echo "- **umod plugins hash:** \`${{ needs.check-updates.outputs.umod_plugins_hash }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Base image published and ready for use by penguin-rust." >> $GITHUB_STEP_SUMMARY
-
-      - name: Trigger private image rebuild
-        if: success()
-        env:
-          GH_TOKEN: ${{ secrets.PENGUIN_RUST_DISPATCH_PAT }}
-        run: |
-          gh api repos/PenguinzTech/penguin-rust/dispatches \
-            --method POST \
-            -f event_type=base-image-updated \
-            -f client_payload='{"base_image_tag":"${{ steps.epoch.outputs.ts }}"}'
