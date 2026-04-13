@@ -97,8 +97,8 @@ All variables have sensible defaults. Set only what you need to override.
 |----------|---------|-------------|
 | `RUST_SERVER_NAME` | `Rust Server` | Server name displayed in browser |
 | `RUST_SERVER_PORT` | `28015` | Game server UDP port |
-| `RUST_SERVER_MAXPLAYERS` | `50` | Maximum concurrent players |
-| `RUST_SERVER_WORLDSIZE` | `3000` | Map size in meters (e.g., 2000, 3000, 4000) |
+| `RUST_SERVER_MAXPLAYERS` | *(auto-detected)* | Maximum concurrent players — see [Auto-Configuration](docs/auto-config.md) |
+| `RUST_SERVER_WORLDSIZE` | *(auto-detected)* | Map size in meters — see [Auto-Configuration](docs/auto-config.md) |
 | `RUST_SERVER_SEED` | `12345` | World seed for map generation |
 | `RUST_SERVER_SAVE_INTERVAL` | `300` | Save world every N seconds |
 | `RUST_SERVER_IDENTITY` | `rust_server` | Server identity (used for save files) |
@@ -129,6 +129,27 @@ docker run -d \
   -e RUST_ADMIN_STEAMIDS="76561198000000000" \
   ghcr.io/penguinztechinc/penguin-rust-base:latest
 ```
+
+### Auto-Configuration
+
+If `RUST_SERVER_WORLDSIZE` and `RUST_SERVER_MAXPLAYERS` are not set, the server
+automatically selects values on **first deployment** based on available CPUs and memory —
+then locks the result so restarts never change a live world.
+
+| Memory   | CPUs | worldSize | maxPlayers |
+|----------|------|-----------|------------|
+| < 4 GB   | ≥1   | 750       | 10         |
+| 4–7 GB   | ≥1   | 2000      | 40         |
+| 8–15 GB  | ≥2   | 3000      | 75         |
+| 16–31 GB | ≥4   | 4000      | 100        |
+| 32+ GB   | ≥4   | 4500      | 150        |
+
+> **Note:** These tiers assume a vanilla Oxide + umod stack. Heavy plugins (XDQuest, Kits,
+> WaterBases) add meaningful memory overhead — consider stepping down one tier or
+> increasing your memory allocation if running a plugin-heavy server.
+
+📖 **Full details:** [docs/auto-config.md](docs/auto-config.md) — lock file behaviour,
+re-triggering detection, and how explicit env vars override auto-detection.
 
 ---
 
