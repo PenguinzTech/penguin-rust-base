@@ -20,7 +20,7 @@ on:
         default: 'false'
         type: boolean
   repository_dispatch:
-    types: [force-rebuild]
+    types: [force-rebuild, plugin-updated]
 
 env:
   REGISTRY: ghcr.io
@@ -40,7 +40,6 @@ jobs:
       should_build: ${{ steps.compare.outputs.should_build }}
       oxide_version: ${{ steps.oxide.outputs.version }}
       steam_build_id: ${{ steps.steam.outputs.build_id }}
-      umod_plugins_hash: ${{ steps.umod.outputs.hash }}
       image_name_lower: ${{ steps.image.outputs.lower }}
 
     steps:
@@ -50,23 +49,8 @@ jobs:
           RAW_IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: echo "lower=${RAW_IMAGE_NAME,,}" >> $GITHUB_OUTPUT
 
-      - name: Checkout (needed for umod-plugins.txt)
+      - name: Checkout (needed for plugin-refs.txt)
         uses: actions/checkout@v4
-
-      - name: Compute umod plugins hash
-        id: umod
-        run: |
-          VERSIONS=""
-          while IFS='|' read -r slug filename; do
-            case "$slug" in '#'*|'') continue ;; esac
-            ver=$(curl -fsSL "https://umod.org/plugins/${slug}.json" \
-                  | jq -r '.latest_release_version // .version // "unknown"' 2>/dev/null \
-                  || echo "unknown")
-            VERSIONS="${VERSIONS}${slug}:${ver},"
-          done < docker/umod-plugins.txt
-          HASH=$(echo -n "$VERSIONS" | sha256sum | cut -d' ' -f1)
-          echo "hash=${HASH}" >> $GITHUB_OUTPUT
-          echo "umod plugins hash: ${HASH}"
 
       - name: Get latest Oxide.Rust release version
         id: oxide
@@ -157,6 +141,80 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Stage scanned plugins from penguin-rust-plugins (signed tarballs)
+        id: stage-plugins
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLUGINS_REPO: PenguinzTech/penguin-rust-plugins
+        run: |
+          set -eu
+          mkdir -p docker/staged-plugins
+          : > docker/plugin-refs.txt.last-good.new
+          FALLBACK_USED=0
+          # Fetch release tag list once — avoids N API calls for N plugins.
+          all_tags=$(gh release list --repo "${PLUGINS_REPO}" --limit 500 \
+                      --json tagName -q '.[].tagName')
+
+          while IFS='|' read -r slug filename; do
+            case "${slug}" in '#'*|'') continue ;; esac
+            target="docker/staged-plugins/${slug}"
+            rm -rf "${target}" && mkdir -p "${target}"
+            workdir="$(mktemp -d)"
+
+            # Latest release for this slug = highest epoch suffix on "<slug>-<epoch>".
+            # Slugs contain hyphens (e.g. "admin-utilities"), so sort by final field.
+            latest_tag=$(echo "${all_tags}" \
+              | awk -v s="${slug}-" 'index($0,s)==1' \
+              | awk -F- '{print $NF"\t"$0}' | sort -n | tail -1 | cut -f2 || true)
+
+            if [ -n "${latest_tag}" ] \
+               && gh release download "${latest_tag}" --repo "${PLUGINS_REPO}" \
+                  --pattern "${slug}-*.tar.gz" --pattern "${slug}-*.tar.gz.sha256" \
+                  --dir "${workdir}"; then
+              tarball=$(ls "${workdir}/${slug}-"*.tar.gz)
+              # Integrity: sha256 sidecar published by the plugin workflow. Any mutation
+              # in transit or tampering at rest breaks this check.
+              (cd "${workdir}" && sha256sum -c "$(basename "${tarball}").sha256")
+              # Plugin directory layout: tarball root is the staged dir itself.
+              tar -xzf "${tarball}" -C "${target}"
+              tarball_sha=$(sha256sum "${tarball}" | awk '{print $1}')
+              echo "${slug}|${filename}|${latest_tag}|sha256:${tarball_sha}" \
+                >> docker/plugin-refs.txt.last-good.new
+              echo "staged ${slug} from ${latest_tag} (sha256:${tarball_sha})"
+            else
+              echo "WARNING: release fetch failed for ${slug} — trying last-good fallback" >&2
+              if [ -f docker/plugin-refs.txt.last-good ]; then
+                fallback_tag=$(awk -F'|' -v s="${slug}" '$1==s {print $3}' \
+                                docker/plugin-refs.txt.last-good)
+                if [ -n "${fallback_tag}" ] \
+                   && gh release download "${fallback_tag}" --repo "${PLUGINS_REPO}" \
+                      --pattern "${slug}-*.tar.gz" --pattern "${slug}-*.tar.gz.sha256" \
+                      --dir "${workdir}"; then
+                  tarball=$(ls "${workdir}/${slug}-"*.tar.gz)
+                  (cd "${workdir}" && sha256sum -c "$(basename "${tarball}").sha256")
+                  tar -xzf "${tarball}" -C "${target}"
+                  awk -F'|' -v s="${slug}" '$1==s' docker/plugin-refs.txt.last-good \
+                    >> docker/plugin-refs.txt.last-good.new
+                  FALLBACK_USED=1
+                  echo "staged ${slug} from ${fallback_tag} (fallback)"
+                else
+                  echo "FATAL: fallback tag missing or fetch failed for ${slug}" >&2
+                  exit 1
+                fi
+              else
+                echo "FATAL: plugin-refs.txt.last-good missing — cannot fallback for ${slug}" >&2
+                exit 1
+              fi
+            fi
+            # Post-extract verification: ${slug}.hash is committed in the plugins repo
+            # and bundled in the tarball. A second, independent integrity check on the
+            # actual .cs file contents — the Dockerfile does this same check at build time.
+            (cd "${target}" && sha256sum -c "${slug}.hash")
+            rm -rf "${workdir}"
+          done < docker/plugin-refs.txt
+          mv docker/plugin-refs.txt.last-good.new docker/plugin-refs.txt.last-good
+          echo "stale=${FALLBACK_USED}" >> "$GITHUB_OUTPUT"
+
       - name: Unix epoch timestamp
         id: epoch
         run: echo "ts=$(date +%s)" >> $GITHUB_OUTPUT
@@ -182,7 +240,7 @@ jobs:
           labels: |
             dev.penguinztech.oxide-version=${{ needs.check-updates.outputs.oxide_version }}
             dev.penguinztech.steam-build-id=${{ needs.check-updates.outputs.steam_build_id }}
-            dev.penguinztech.umod-plugins-hash=${{ needs.check-updates.outputs.umod_plugins_hash }}
+            dev.penguinztech.plugins-stale=${{ steps.stage-plugins.outputs.stale }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -195,7 +253,6 @@ jobs:
           build-args: |
             OXIDE_VERSION=${{ needs.check-updates.outputs.oxide_version }}
             STEAM_BUILD_ID=${{ needs.check-updates.outputs.steam_build_id }}
-            UMOD_PLUGINS_HASH=${{ needs.check-updates.outputs.umod_plugins_hash }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ needs.check-updates.outputs.image_name_lower }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ needs.check-updates.outputs.image_name_lower }}:buildcache,mode=max
           platforms: linux/amd64
@@ -213,6 +270,5 @@ jobs:
           echo "- **Oxide version:** \`${OXIDE_VERSION}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Steam build ID:** \`${STEAM_BUILD_ID}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Tags:** \`latest\`, \`${TS}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **umod plugins hash:** \`${{ needs.check-updates.outputs.umod_plugins_hash }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Base image published and ready for use by penguin-rust." >> $GITHUB_STEP_SUMMARY

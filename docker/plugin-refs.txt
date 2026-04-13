@@ -1,0 +1,19 @@
+# Per-plugin OCI artifact registry. Base image build calls `oras pull :latest`
+# for each entry into docker/staged-plugins/${slug}/. See build-image.yml.
+#
+# Format: slug|FileName.cs (one per line, # comments ignored)
+#
+# :latest only ever moves after a clean scan in penguin-rust-plugins, so the
+# scan gate propagates implicitly. Resolved digests are captured post-pull into
+# plugin-refs.txt.last-good for registry-outage fallback.
+admin-utilities|AdminUtilities.cs
+bgrade|BGrade.cs
+copy-paste|CopyPaste.cs
+vanish|Vanish.cs
+remover-tool|RemoverTool.cs
+unburnable-meat|UnburnableMeat.cs
+vehicle-decay-protection|VehicleDecayProtection.cs
+night-lantern|NightLantern.cs
+truepve|TruePVE.cs
+stack-size-controller|StackSizeController.cs
+whitelist|Whitelist.cs

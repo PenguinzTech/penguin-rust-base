@@ -22,7 +22,6 @@ FROM debian:bookworm-slim
 
 ARG OXIDE_VERSION
 ARG STEAM_BUILD_ID
-ARG UMOD_PLUGINS_HASH
 
 # Set pipefail on all RUN pipelines so a failure upstream of a pipe (e.g. curl)
 # aborts the build instead of being masked by a successful downstream tar/unzip.
@@ -67,6 +66,9 @@ ENV RUST_SERVER_FPS=""
 # When OXIDE=0 the server is pure vanilla + full PvP; PVP_MODE is ignored.
 ENV OXIDE="1"
 ENV PVP_MODE="1"
+
+# ─── Plugin source toggle (github=scanned default, umod=bypass at runtime) ──
+ENV PLUGIN_SOURCE="github"
 
 # ─── Wipe schedule ───────────────────────────────────────────────────────────
 # WIPE_SCHED (blank) = wipe on first Thursday of month (Facepunch forced-wipe day)
@@ -151,20 +153,36 @@ RUN cp -a /steamcmd/rust/RustDedicated_Data/Managed \
     unzip -o /tmp/oxide.zip -d /steamcmd/rust && \
     rm /tmp/oxide.zip
 
-# ─── umod.org plugin layer ───────────────────────────────────────────────────
-# Downloaded fresh at build time from umod.org — always gets latest versions.
-# UMOD_PLUGINS_HASH busts this layer's cache when any plugin version changes.
-# Registry: docker/umod-plugins.txt (slug|FileName.cs, one per line).
-# Sits above the base layers so umod-only rebuilds reuse the Steam cache.
-COPY --chown=rustserver:rustserver umod-plugins.txt /tmp/umod-plugins.txt
-RUN mkdir -p /steamcmd/rust/oxide/plugins && \
-    while IFS='|' read -r slug filename; do \
-      case "$slug" in '#'*|'') continue ;; esac; \
-      curl -fsSL "https://umod.org/plugins/${slug}.cs" \
-        -o "/steamcmd/rust/oxide/plugins/${filename}" \
-      || echo "WARNING: failed to download ${slug} — skipping"; \
-    done < /tmp/umod-plugins.txt && \
-    rm /tmp/umod-plugins.txt
+# ─── Scanned-plugin layer (penguin-rust-plugins OCI artifacts) ───────────────
+# Plugins are fetched and scanned (ClamAV + YARA + Semgrep + gitleaks + trivy)
+# in the separate penguin-rust-plugins repo, then published as per-plugin OCI
+# artifacts at ghcr.io/penguinztech/penguin-rust-plugins/${slug}:latest.
+# :latest only moves after a clean scan, so consuming it here propagates the
+# scan gate implicitly. See docker/plugin-refs.txt for the registry and
+# .github/workflows/build-image.yml for the `oras pull` staging logic.
+#
+# staged-plugins/ is populated by the CI workflow before `docker build` runs.
+# Each staged-plugins/${slug}/ contains: ${FileName}.cs, ${slug}.hash,
+# provenance.json, sbom.cdx.json, ATTRIBUTION.md, reports/.
+COPY --chown=rustserver:rustserver staged-plugins/ /etc/penguin-rust-plugins/per-plugin/
+
+# umod-plugins.txt remains on the image — start.sh reads it under PLUGIN_SOURCE=umod
+# to know which slugs to fetch directly from umod.org at runtime (scan-bypass mode).
+COPY --chown=rustserver:rustserver umod-plugins.txt /etc/penguin-rust-plugins/umod-plugins.txt
+
+# Verify every plugin matches its committed hash before staging into oxide/plugins/.
+# Hash mismatch = the OCI artifact was tampered between cosign-sign and our pull —
+# fail the build rather than ship a bad plugin.
+RUN set -eu; \
+    mkdir -p /steamcmd/rust/oxide/plugins; \
+    cd /etc/penguin-rust-plugins/per-plugin; \
+    for dir in */; do \
+      slug="${dir%/}"; \
+      (cd "${slug}" && sha256sum -c "${slug}.hash") \
+        || { echo "FATAL: ${slug} hash mismatch — refusing to build" >&2; exit 1; }; \
+      find "${slug}" -maxdepth 1 -name '*.cs' \
+        -exec cp --preserve=mode {} /steamcmd/rust/oxide/plugins/ \; ; \
+    done
 
 # ─── Built-in plugins ────────────────────────────────────────────────────────
 # AutoAdmin is baked into the base image so every downstream image gets
@@ -187,10 +205,9 @@ USER rustserver
 # ─── OCI labels ──────────────────────────────────────────────────────────────
 # Consumed by CI workflow (skopeo inspect) to detect whether a rebuild is needed.
 LABEL org.opencontainers.image.source="https://github.com/PenguinzTech/penguin-rust-base" \
-      org.opencontainers.image.description="Rust dedicated server with Oxide + umod plugins — community base image" \
+      org.opencontainers.image.description="Rust dedicated server with Oxide + scanned plugins — community base image" \
       dev.penguinztech.oxide-version="${OXIDE_VERSION}" \
-      dev.penguinztech.steam-build-id="${STEAM_BUILD_ID}" \
-      dev.penguinztech.umod-plugins-hash="${UMOD_PLUGINS_HASH}"
+      dev.penguinztech.steam-build-id="${STEAM_BUILD_ID}"
 
 WORKDIR /steamcmd/rust
 

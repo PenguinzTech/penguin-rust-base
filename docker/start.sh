@@ -229,6 +229,57 @@ EOF
     echo "[startup] PVP_MODE=${PVP_MODE:-1} — TruePVE defaultAllowDamage=${_TPVE_ALLOW_DAMAGE} (${_TPVE_LABEL})"
 fi
 
+# ─── Plugin source selection (github=scanned, umod=bypass) ──────────────────
+# PLUGIN_SOURCE=github (default) uses the plugins baked into the image from
+# penguin-rust-plugins (ClamAV/YARA/Semgrep/gitleaks/trivy clean). Hashes are
+# verified at startup against /etc/penguin-rust-plugins/per-plugin/${slug}/${slug}.hash.
+# PLUGIN_SOURCE=umod pulls fresh copies directly from umod.org over the baked
+# ones — bypasses the scan gate, warns loudly. Opt-in for operators who need
+# same-day upstream fixes and accept the trust tradeoff.
+if [ "${OXIDE:-1}" != "0" ]; then
+    PLUGIN_SOURCE="${PLUGIN_SOURCE:-github}"
+    case "${PLUGIN_SOURCE}" in
+        github)
+            echo "[startup] PLUGIN_SOURCE=github — using scanned plugins baked into image"
+            if [ "${VERIFY_PLUGIN_HASHES:-1}" = "1" ] && [ -d /etc/penguin-rust-plugins/per-plugin ]; then
+                echo "[startup] Verifying plugin hashes against committed manifest..."
+                (
+                    cd /etc/penguin-rust-plugins/per-plugin
+                    for dir in */; do
+                        slug="${dir%/}"
+                        if ! (cd "${slug}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
+                            echo "[startup] FATAL: ${slug} hash mismatch at runtime — refusing to start" >&2
+                            exit 1
+                        fi
+                    done
+                ) || exit 1
+                echo "[startup] All plugin hashes verified."
+            fi
+            ;;
+        umod)
+            echo "[startup] WARNING: PLUGIN_SOURCE=umod — bypassing scan pipeline, pulling directly from umod.org" >&2
+            echo "[startup] WARNING: plugins fetched this way have NOT been scanned by ClamAV/YARA/Semgrep/gitleaks/trivy" >&2
+            if [ -f /etc/penguin-rust-plugins/umod-plugins.txt ]; then
+                while IFS='|' read -r slug filename; do
+                    case "${slug}" in '#'*|'') continue ;; esac
+                    if curl -fsSL "https://umod.org/plugins/${slug}.cs" \
+                        -o "/steamcmd/rust/oxide/plugins/${filename}"; then
+                        echo "[startup] fetched umod:${slug} → ${filename}"
+                    else
+                        echo "[startup] WARNING: failed to fetch umod:${slug} — keeping baked copy" >&2
+                    fi
+                done < /etc/penguin-rust-plugins/umod-plugins.txt
+            else
+                echo "[startup] WARNING: /etc/penguin-rust-plugins/umod-plugins.txt missing — no plugins refreshed" >&2
+            fi
+            ;;
+        *)
+            echo "[startup] FATAL: PLUGIN_SOURCE=${PLUGIN_SOURCE} invalid — must be 'github' or 'umod'" >&2
+            exit 1
+            ;;
+    esac
+fi
+
 # ─── Runtime plugin toggle ───────────────────────────────────────────────────
 # Disable specific plugins at runtime without rebuilding the image.
 # OXIDE_DISABLED_PLUGINS=Vanish,BGrade  (comma-separated, with or without .cs)
