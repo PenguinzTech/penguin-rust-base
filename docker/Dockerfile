@@ -156,8 +156,9 @@ RUN cp -a /steamcmd/rust/RustDedicated_Data/Managed \
 # UMOD_PLUGINS_HASH busts this layer's cache when any plugin version changes.
 # Registry: docker/umod-plugins.txt (slug|FileName.cs, one per line).
 # Sits above the base layers so umod-only rebuilds reuse the Steam cache.
-COPY umod-plugins.txt /tmp/umod-plugins.txt
-RUN while IFS='|' read -r slug filename; do \
+COPY --chown=rustserver:rustserver umod-plugins.txt /tmp/umod-plugins.txt
+RUN mkdir -p /steamcmd/rust/oxide/plugins && \
+    while IFS='|' read -r slug filename; do \
       case "$slug" in '#'*|'') continue ;; esac; \
       curl -fsSL "https://umod.org/plugins/${slug}.cs" \
         -o "/steamcmd/rust/oxide/plugins/${filename}" \
