@@ -56,7 +56,7 @@ jobs:
           fetch-depth: 0
 
       - name: Scan for secrets with gitleaks
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c3
+        uses: gitleaks/gitleaks-action@bf2dc8e55639c1e091e9b45970152e4313705814
 
   # Scan IaC (Dockerfiles, shell scripts) for security violations
   # Uses Checkov to check Docker security practices (CKV_DOCKER_* only)
@@ -68,7 +68,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Scan IaC with Checkov (Docker checks only)
-        uses: bridgecrewio/checkov-action@3b3986f769cc2af94e4ba4e7a3c80b3e89bb0db3
+        uses: bridgecrewio/checkov-action@de2bfaecd21d58ef232e0d2a3391c33c32c460d7
         with:
           directory: docker/
           check: CKV_DOCKER_1,CKV_DOCKER_2,CKV_DOCKER_3,CKV_DOCKER_4,CKV_DOCKER_5,CKV_DOCKER_6,CKV_DOCKER_7,CKV_DOCKER_8,CKV_DOCKER_9,CKV_DOCKER_10,CKV_DOCKER_11,CKV_DOCKER_12,CKV_DOCKER_13,CKV_DOCKER_14,CKV_DOCKER_15,CKV_DOCKER_16,CKV_DOCKER_17,CKV_DOCKER_18,CKV_DOCKER_19,CKV_DOCKER_20,CKV_DOCKER_21,CKV_DOCKER_22
@@ -89,7 +89,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Scan image with Trivy
-        uses: aquasec/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8
+        uses: aquasecurity/trivy-action@264c9c5e188ea085e7377fd77abd17bfbd4e5926
         with:
           image-ref: ghcr.io/penguintechinc/penguin-rust-base:latest
           format: sarif
@@ -98,7 +98,7 @@ jobs:
           exit-code: '1'
 
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@b611370bb5703a7efb587f9d136db6ce476cf3a9
+        uses: github/codeql-action/upload-sarif@8339b9254eca5409ae8a480f4146a72e9ebb21a7
         if: always()
         with:
           sarif_file: trivy-results.sarif

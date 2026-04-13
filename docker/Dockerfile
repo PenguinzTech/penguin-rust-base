@@ -24,20 +24,80 @@ ARG OXIDE_VERSION
 ARG STEAM_BUILD_ID
 ARG UMOD_PLUGINS_HASH
 
+# Set pipefail on all RUN pipelines so a failure upstream of a pipe (e.g. curl)
+# aborts the build instead of being masked by a successful downstream tar/unzip.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # ─── Server defaults — override at runtime via -e or Helm env vars ───────────
 # Left blank so start.sh auto-configures based on available resources on first boot.
 # Set explicitly to skip auto-detection: docker run -e RUST_SERVER_WORLDSIZE=2000
 ENV RUST_SERVER_WORLDSIZE=""
 ENV RUST_SERVER_MAXPLAYERS=""
 
+# ─── Server identity / browser listing ───────────────────────────────────────
+ENV RUST_SERVER_NAME="Rust Server"
+ENV RUST_SERVER_DESCRIPTION=""
+ENV RUST_SERVER_TAGS=""
+ENV RUST_SERVER_URL=""
+ENV RUST_SERVER_HEADERIMAGE=""
+ENV RUST_SERVER_LOGO=""
+
+# ─── Server behaviour ────────────────────────────────────────────────────────
+# RUST_SERVER_LEVEL: map type — "Procedural Map", "Barren", "HapisIsland", etc.
+# RUST_SERVER_PVE / RUST_SERVER_RADIATION: set to 0 or 1 to override game default
+# RUST_SERVER_TICKRATE / RUST_SERVER_FPS: leave blank to use game defaults
+ENV RUST_SERVER_LEVEL="Procedural Map"
+ENV RUST_SERVER_PVE=""
+ENV RUST_SERVER_RADIATION=""
+ENV RUST_SERVER_TICKRATE=""
+ENV RUST_SERVER_FPS=""
+
+# ─── Mod framework / PvP toggles ─────────────────────────────────────────────
+# OXIDE=1 (default) keeps Oxide + umod plugins loaded.
+# OXIDE=0 restores vanilla RustDedicated from the baked Managed.vanilla/ snapshot
+#   and removes oxide/ — no plugins, no Oxide hooks, pure Facepunch binary.
+#
+# PVP_MODE only applies when OXIDE=1. It flips TruePVE's global
+# `defaultAllowDamage` — TruePVE stays loaded in both modes so admins can
+# configure zones, rulesets, and per-entity exceptions either way.
+#   PVP_MODE=1 (default) → defaultAllowDamage=true   (PvP globally; carve out
+#                                                     PvE zones via TruePVE)
+#   PVP_MODE=0           → defaultAllowDamage=false  (PvE globally; carve out
+#                                                     PvP zones via TruePVE)
+# When OXIDE=0 the server is pure vanilla + full PvP; PVP_MODE is ignored.
+ENV OXIDE="1"
+ENV PVP_MODE="1"
+
+# ─── Wipe schedule ───────────────────────────────────────────────────────────
+# WIPE_SCHED (blank) = wipe on first Thursday of month (Facepunch forced-wipe day)
+# WIPE_SCHED=1w|2w|3w = every N weeks on WIPE_DAY
+# WIPE_SCHED=off = no automated wipes
+# WIPE_TIME is when the wipe actually happens; RCON warnings start 60 min earlier.
+ENV WIPE_SCHED=""
+ENV WIPE_DAY="Th"
+ENV WIPE_TIME="06:00"
+ENV WIPE_BP="false"
+
+# ─── DDoS protection (opt-in) ────────────────────────────────────────────────
+# DDOS_PROTECT=1 enables iptables hashlimit per-source-IP UDP rate limiting.
+# Requires NET_ADMIN capability on the container. Default off so the image
+# runs capability-free. See docs/ddos-protection.md for tuning guidance.
+ENV DDOS_PROTECT="0"
+ENV DDOS_UDP_RATE="60"
+ENV DDOS_UDP_BURST="120"
+
 # SteamCMD requires 32-bit glibc compatibility layer.
 # websocat enables WebSocket RCON commands from start.sh (server.maxplayers, config.save).
 # Create non-root service account before installing files so ownership is clean.
+# DL3008 ignored: community base rebuilds every 4h; pinning apt versions across
+# Debian point releases makes auto-rebuilds brittle without a security benefit.
+# hadolint ignore=DL3008
 RUN dpkg --add-architecture i386 && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        iptables \
         lib32gcc-s1 \
         numactl \
         procps \
@@ -73,7 +133,11 @@ RUN mkdir -p /home/rustserver/.steam/sdk64 && \
 # ─── Oxide layer (~50MB) ─────────────────────────────────────────────────────
 # Sits above Steam layer so it rebuilds independently on Oxide releases.
 # -o overwrites game-managed files (e.g. Assembly-CSharp.dll) without prompting.
-RUN echo "Downloading Oxide ${OXIDE_VERSION}..." && \
+# Before unzipping, snapshot Managed/ as Managed.vanilla/ so OXIDE=0 at runtime
+# can restore vanilla without a Steam round-trip (~50MB layer cost; acceptable).
+RUN cp -a /steamcmd/rust/RustDedicated_Data/Managed \
+          /steamcmd/rust/RustDedicated_Data/Managed.vanilla && \
+    echo "Downloading Oxide ${OXIDE_VERSION}..." && \
     curl -fsSL \
     "https://github.com/OxideMod/Oxide.Rust/releases/download/${OXIDE_VERSION}/Oxide.Rust-linux.zip" \
     -o /tmp/oxide.zip && \
@@ -121,4 +185,11 @@ LABEL org.opencontainers.image.source="https://github.com/PenguinzTech/penguin-r
       dev.penguinztech.umod-plugins-hash="${UMOD_PLUGINS_HASH}"
 
 WORKDIR /steamcmd/rust
+
+# Health check: verify RustDedicated is running (no curl/wget per project rules).
+# start-period gives ~10 min for world generation on first boot before health
+# reports kick in — prevents K8s/Docker from killing the pod during startup.
+HEALTHCHECK --interval=60s --timeout=5s --start-period=600s --retries=3 \
+    CMD pgrep -f RustDedicated > /dev/null || exit 1
+
 ENTRYPOINT ["/start.sh"]

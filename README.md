@@ -6,6 +6,8 @@ A production-ready Docker image for Rust dedicated game servers with Oxide mod f
 
 Perfect for operators, communities, and teams extending with proprietary plugins via `FROM`.
 
+📖 **Full configuration reference:** [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+
 ---
 
 ## What's Included
@@ -25,13 +27,16 @@ Perfect for operators, communities, and teams extending with proprietary plugins
   - **StackSizeController** — Customize item stack sizes
   - **Whitelist** — Restrict server access to whitelisted players
 - **AutoAdmin Plugin** — Custom PenguinzTech plugin that auto-provisions Oxide permissions from environment variables
+- **Auto-Configuration** — First-boot tuning of `worldSize`/`maxPlayers` based on available CPU/RAM
+- **Wipe Scheduler** — Configurable map wipes with in-game RCON warnings (60-minute lead time)
+- **DDoS Protection** — Per-source-IP rate limiting via iptables (opt-in, requires `NET_ADMIN`)
 - **Debian 12 Bookworm Runtime** — Lightweight, secure, production-hardened container
 
 ---
 
 ## Quick Start
 
-### Basic Server (50 players, 3000-sized map)
+### Basic Server (auto-tuned world size and player limit)
 
 ```bash
 docker run -d \
@@ -40,12 +45,10 @@ docker run -d \
   -p 28015:28015/tcp \
   -p 28016:28016/tcp \
   -e RUST_SERVER_NAME="My Rust Server" \
-  -e RUST_SERVER_MAXPLAYERS=50 \
-  -e RUST_RCON_PASSWORD="changeme123" \
   ghcr.io/penguinztechinc/penguin-rust-base:latest
 ```
 
-### With Admin Access
+### With Admin Access + Persistent Volume
 
 ```bash
 docker run -d \
@@ -55,16 +58,13 @@ docker run -d \
   -p 28016:28016/tcp \
   -v rust-data:/steamcmd/rust/server \
   -e RUST_SERVER_NAME="My Rust Server" \
-  -e RUST_SERVER_MAXPLAYERS=50 \
-  -e RUST_RCON_PASSWORD="secure-password" \
   -e RUST_ADMIN_STEAMIDS="76561198000000000,76561198000000001" \
   ghcr.io/penguinztechinc/penguin-rust-base:latest
 ```
 
-### Docker Compose Example
+### Docker Compose
 
 ```yaml
-version: '3.8'
 services:
   rust:
     image: ghcr.io/penguinztechinc/penguin-rust-base:latest
@@ -77,10 +77,11 @@ services:
       - rust-data:/steamcmd/rust/server
     environment:
       RUST_SERVER_NAME: "My Community Server"
-      RUST_SERVER_MAXPLAYERS: 100
-      RUST_SERVER_WORLDSIZE: 4000
-      RUST_RCON_PASSWORD: "your-secure-password"
-      RUST_ADMIN_STEAMIDS: "76561198000000000,76561198000000001"
+      RUST_SERVER_DESCRIPTION: "Weekly wipes, friendly community"
+      RUST_SERVER_TAGS: "weekly,vanilla,pvp"
+      WIPE_SCHED: "1w"
+      WIPE_DAY: "Th"
+      RUST_ADMIN_STEAMIDS: "76561198000000000"
     restart: unless-stopped
 
 volumes:
@@ -89,226 +90,44 @@ volumes:
 
 ---
 
-## Environment Variables
+## Configuration
 
-All variables have sensible defaults. Set only what you need to override.
+All settings are controlled via environment variables. The most commonly set ones:
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `RUST_SERVER_NAME` | `Rust Server` | Server name displayed in browser |
-| `RUST_SERVER_PORT` | `28015` | Game server UDP port |
-| `RUST_SERVER_MAXPLAYERS` | *(auto-detected)* | Maximum concurrent players — see [Auto-Configuration](docs/auto-config.md) |
-| `RUST_SERVER_WORLDSIZE` | *(auto-detected)* | Map size in meters — see [Auto-Configuration](docs/auto-config.md) |
-| `RUST_SERVER_SEED` | `12345` | World seed for map generation |
-| `RUST_SERVER_SAVE_INTERVAL` | `300` | Save world every N seconds |
-| `RUST_SERVER_IDENTITY` | `rust_server` | Server identity (used for save files) |
-| `RUST_RCON_PORT` | `28016` | RCON/WebRCON TCP port |
-| `RUST_RCON_PASSWORD` | *(none)* | RCON password; RCON disabled if unset |
-| `RUST_RCON_WEB` | `1` | Enable WebRCON (`1` = on, `0` = off) |
-| `MONO_MAX_HEAP` | `16g` | Mono garbage collector heap limit (e.g., `8g`, `16g`, `32g`) |
-| `RUST_CPU_CORES` | *(none)* | CPU cores to pin game loop (e.g., `0,1` or leave empty to disable) |
-| `RUST_ADMIN_STEAMIDS` | *(none)* | Comma-separated Steam IDs; grants Rust owner + Oxide permissions |
-| `OXIDE_DISABLED_PLUGINS` | *(none)* | Comma-separated plugin names to disable at runtime |
-| `RUST_SERVER_EXTRA_ARGS` | *(none)* | Additional arguments passed to RustDedicated |
+|---|---|---|
+| `RUST_SERVER_NAME` | `Rust Server` | Server name in browser |
+| `RUST_SERVER_MAXPLAYERS` | *(auto-detected)* | Max concurrent players |
+| `RUST_SERVER_WORLDSIZE` | *(auto-detected)* | Map size in meters |
+| `RUST_SERVER_SEED` | `12345` | World seed |
+| `RUST_RCON_PASSWORD` | *(auto-generated)* | RCON password; generated and persisted to PVC if unset |
+| `RUST_ADMIN_STEAMIDS` | *(none)* | Comma-separated admin Steam IDs |
+| `WIPE_SCHED` | *(first Thu of month)* | `1w`, `2w`, `3w`, or `off` |
 
-### Example: 100-Player Server with Custom Map
+📖 **Everything else** — browser listing (description, tags, URL, logo), server behaviour (PvE, radiation, tickrate), wipe schedule details, DDoS protection, admin provisioning, plugin toggles, auto-config tiers, performance tuning — is documented in **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
 
-```bash
-docker run -d \
-  --name rust-100 \
-  -p 28015:28015/udp \
-  -p 28015:28015/tcp \
-  -p 28016:28016/tcp \
-  -v rust-data:/steamcmd/rust/server \
-  -e RUST_SERVER_NAME="100-Player Server" \
-  -e RUST_SERVER_MAXPLAYERS=100 \
-  -e RUST_SERVER_WORLDSIZE=4000 \
-  -e RUST_SERVER_SEED=999888 \
-  -e RUST_RCON_PASSWORD="MySecurePassword123" \
-  -e MONO_MAX_HEAP=24g \
-  -e RUST_ADMIN_STEAMIDS="76561198000000000" \
-  ghcr.io/penguinztechinc/penguin-rust-base:latest
-```
-
-### Auto-Configuration
-
-If `RUST_SERVER_WORLDSIZE` and `RUST_SERVER_MAXPLAYERS` are not set, the server
-automatically selects values on **first deployment** based on available CPUs and memory —
-then locks the result so restarts never change a live world.
-
-| Memory   | CPUs | worldSize | maxPlayers |
-|----------|------|-----------|------------|
-| < 4 GB   | ≥1   | 750       | 10         |
-| 4–7 GB   | ≥1   | 2000      | 40         |
-| 8–15 GB  | ≥2   | 3000      | 75         |
-| 16–31 GB | ≥4   | 4000      | 100        |
-| 32+ GB   | ≥4   | 4500      | 150        |
-
-> **Note:** These tiers assume a vanilla Oxide + umod stack. Heavy plugins (XDQuest, Kits,
-> WaterBases) add meaningful memory overhead — consider stepping down one tier or
-> increasing your memory allocation if running a plugin-heavy server.
-
-> **CPU provisioning note:** Auto-config reads the CPUs visible to the container at first boot.
-> For best results, provision your full core budget at deploy time (world gen is multi-threaded
-> and uses all cores). You can narrow the game loop later with `RUST_CPU_CORES` — see
-> [CPU Pinning](#cpu-pinning-two-phase) below.
-
-📖 **Full details:** [docs/auto-config.md](docs/auto-config.md) — lock file behaviour,
-re-triggering detection, and how explicit env vars override auto-detection.
-
----
-
-## Admin Provisioning
-
-### RUST_ADMIN_STEAMIDS
-
-Pass comma-separated Steam IDs to automatically grant admin access on every container startup:
-
-```bash
--e RUST_ADMIN_STEAMIDS="76561198000000000,76561198000000001,76561198000000002"
-```
-
-**What happens:**
-1. Steam ID is added to `users.cfg` as an owner (native Rust server permission)
-2. **AutoAdmin.cs plugin** grants all Oxide plugin permissions for that Steam ID (except `vanish.permanent`)
-3. On next restart, process repeats — idempotent and safe
-
-**To find your Steam ID:**
-- Visit [SteamIDFinder](https://www.steamidfinder.com/)
-- Enter your Steam profile URL
-- Copy the **64-bit SteamID** (e.g., `76561198000000000`)
-
----
-
-## Runtime Plugin Toggle
-
-### OXIDE_DISABLED_PLUGINS
-
-Disable any plugin at runtime without rebuilding the image:
-
-```bash
-# Disable Vanish and Whitelist
--e OXIDE_DISABLED_PLUGINS="Vanish,Whitelist"
-
-# Disable multiple plugins
--e OXIDE_DISABLED_PLUGINS="AdminUtilities,CopyPaste,NightLantern"
-```
-
-**How it works:**
-- Oxide scans the `oxide/plugins/` directory on startup
-- Disabled plugin files are moved to `oxide/plugins-disabled/` (non-scanning location)
-- Files are **not deleted** — they restore from image on restart
-- Toggle is purely environment-variable-controlled
-
-**Example: Disable PvE for a PvP wipe**
-
-```bash
-# Standard server (Whitelist + TruePVE)
-docker run -e "OXIDE_DISABLED_PLUGINS=TruePVE" ...
-
-# Later, switch to PvP
-docker restart rust-server  # With updated env var
-```
-
----
-
-## Whitelist Plugin (Closed Server)
-
-The **Whitelist** plugin is pre-installed and enabled by default. By default, the server is **closed** to join.
-
-### Two Ways to Grant Access
-
-#### 1. Admin Bypass (Default)
-Admins (from `RUST_ADMIN_STEAMIDS`) bypass the whitelist. Set `Admin Excluded = true` in `oxide/data/Whitelist.json` (default).
-
-#### 2. Grant via Whitelist Permission
-Use RCON to grant `whitelist.allow` permission:
-
-```bash
-# Connect via RCON (e.g., Rustcord bot, console, or web UI)
-oxide.grant user 76561198000000000 whitelist.allow
-```
-
-Player can now join. Permission is stored in `oxide/data/Whitelist.json` and persists across restarts.
-
-### Disable Whitelist Entirely
-
-```bash
--e OXIDE_DISABLED_PLUGINS="Whitelist"
-```
-
----
-
-## Oxide Data Persistence
-
-The `oxide/data/` directory contains all plugin data: permissions, whitelisted players, config settings.
-
-### First Boot
-- `oxide/data/` is created from image seed (empty, basic defaults)
-- Symlinked to persistent storage (if using a volume mount)
-
-### Persist Across Restarts
-Mount a volume to preserve plugin data:
-
-```bash
-docker run -d \
-  -v rust-oxide-data:/steamcmd/rust/server/oxide/data \
-  ghcr.io/penguinztechinc/penguin-rust-base:latest
-```
-
-### Reseed Data Directory
-To reset all plugins settings, whitelist, and permissions:
-
-```bash
-docker exec rust-server rm -rf /steamcmd/rust/server/oxide/data
-docker restart rust-server
-```
-
-Container will recreate `oxide/data/` from image on next start. All plugins reload with defaults.
+Specialist guides:
+- **[docs/auto-config.md](docs/auto-config.md)** — first-boot resource detection, lock file behaviour
+- **[docs/wipe-schedule.md](docs/wipe-schedule.md)** — wipe cadence, blueprint wipes, warning schedule
+- **[docs/ddos-protection.md](docs/ddos-protection.md)** — rate limiting and auto-ban
 
 ---
 
 ## Image Tags & Versioning
 
-> ⚠️ **IMPORTANT: Tag Strategy & Immutability**
-
-Every build produces **two tags**:
-- **`latest`** — Always points to the most recent build (mutable)
-- **Unix epoch timestamp** — Immutable, unique per build (e.g., `1747123456`)
-
-### Why Two Tags?
+Every build produces two tags:
 
 | Tag | Mutability | Use Case |
 |-----|-----------|----------|
 | `latest` | Mutable | Development, testing — always get the newest Oxide/Steam updates |
-| `1747123456` | Immutable | Production, pinning — freeze a known-good build for stability |
-
-### Using the Immutable Tag
+| `<unix-epoch>` | Immutable | Production, pinning — freeze a known-good build |
 
 ```bash
-# Pull a specific, known-good build
-docker pull ghcr.io/penguinztechinc/penguin-rust-base:1747123456
-
-# Dockerfile
+# Pin to a specific build in production
 FROM ghcr.io/penguinztechinc/penguin-rust-base:1747123456
-
-# Helm values.yaml
-image:
-  repository: ghcr.io/penguinztechinc/penguin-rust-base
-  tag: "1747123456"
 ```
 
-### List All Available Tags
-
-Use `skopeo` to list available epoch tags:
-
-```bash
-docker run --rm quay.io/skopeo/stable list-tags \
-  docker://ghcr.io/penguinztechinc/penguin-rust-base | head -20
-```
-
-Or query GitHub Container Registry directly:
-
+List available tags:
 ```bash
 curl -s https://ghcr.io/v2/penguinztechinc/penguin-rust-base/tags/list | jq '.tags'
 ```
@@ -317,236 +136,69 @@ curl -s https://ghcr.io/v2/penguinztechinc/penguin-rust-base/tags/list | jq '.ta
 
 ## Extending This Image
 
-Add custom plugins or configuration by using this image as a base:
-
-### Example: Custom Plugins
-
 ```dockerfile
 FROM ghcr.io/penguinztechinc/penguin-rust-base:1747123456
 
-# Copy custom/proprietary plugins
+# Custom/proprietary plugins
 COPY --chown=rustserver:rustserver my-plugins/ /steamcmd/rust/oxide/plugins/
 
-# Copy custom plugin data (config, whitelist, permissions)
+# Pre-seeded plugin data
 COPY --chown=rustserver:rustserver my-data/ /steamcmd/rust/oxide/data/
 
-# Optionally override server name
+# Default overrides
 ENV RUST_SERVER_NAME="My Custom Server"
-```
-
-Build and run:
-
-```bash
-docker build -t my-rust-server:latest .
-docker run -d -p 28015:28015/udp -p 28015:28015/tcp my-rust-server:latest
-```
-
-### Accessing Your Extended Image
-
-Store in private registry or GitHub Container Registry:
-
-```bash
-docker tag my-rust-server:latest ghcr.io/my-org/my-rust-server:latest
-docker push ghcr.io/my-org/my-rust-server:latest
 ```
 
 ---
 
 ## Automatic Updates
 
-### Build Automation
-
-This image automatically rebuilds on a schedule:
-
-- **Every 4 hours** — Check for Oxide and Steam updates; rebuild if changes detected
-- **Every 24 hours** — Check for umod plugin updates; rebuild if new versions available
-- **On dispatch** — Rebuilds trigger downstream private images (if configured)
-
-### Manual Rebuild
-
-Trigger a rebuild immediately:
-
-```bash
-gh workflow run build.yml
-```
-
-(Requires `gh` CLI and GitHub write access)
-
----
-
-## Building Locally
-
-Build the image locally with required arguments:
-
-```bash
-docker build \
-  --build-arg OXIDE_VERSION=2.0.5 \
-  --build-arg STEAM_BUILD_ID=3191471 \
-  --build-arg UMOD_PLUGINS_HASH=abc123def456 \
-  -t penguin-rust-base:local .
-```
-
-Required arguments:
-- `OXIDE_VERSION` — Oxide release version (e.g., `2.0.5`)
-- `STEAM_BUILD_ID` — Steam app 258550 build ID (e.g., `3191471`)
-- `UMOD_PLUGINS_HASH` — Hash of combined plugin dependencies (ensures reproducibility)
-
-**Note:** First build downloads ~6GB of game files. Subsequent builds reuse cached layers if Oxide/Steam unchanged.
-
----
-
-## Security
-
-### Scanned
-
-- **Dockerfile** — hadolint, Checkov security checks
-- **start.sh** — Shellcheck syntax and style validation
-- **Image CVEs** — Trivy vulnerability scanner (post-build)
-- **Secrets** — gitleaks prevents hardcoded credentials
-
-### NOT Scanned
-
-Third-party `.cs` plugin files (from umod.org and lone.design) are **not scanned** — security is the responsibility of plugin authors. Vet plugins before use in production.
-
-### Container Security
-
-- Runs as non-root user (`rustserver:rustserver`)
-- Read-only root filesystem where possible
-- Capabilities dropped to minimum required
-- No hardcoded secrets or credentials
+- **Every 4 hours** — check Oxide and Steam for updates, rebuild if changed
+- **Every 24 hours** — check umod plugin versions, rebuild if changed
+- **On dispatch** — manual `gh workflow run build.yml`
 
 ---
 
 ## Networking
 
-### Ports
-
 | Port | Protocol | Purpose |
 |------|----------|---------|
 | `28015` | UDP + TCP | Game server port (connections + queries) |
-| `28016` | TCP | RCON / WebRCON port |
+| `28016` | TCP | RCON / WebRCON |
 
-### Port Mapping
+Forward **both UDP and TCP** on port 28015. RCON is optional.
 
-Forward **both UDP and TCP** on port 28015:
+---
 
-```bash
--p 28015:28015/udp -p 28015:28015/tcp
-```
+## Security
 
-**RCON is optional.** If `RUST_RCON_PASSWORD` is not set, RCON is disabled.
+Runs as non-root (`rustserver:rustserver`, UID 1000); no capabilities required unless DDoS protection is enabled. RCON password auto-generated on first boot and persisted to the PVC — never embedded.
+
+Full details — CI scanners, what's not scanned, reporting vulnerabilities: **[docs/SECURITY.md](docs/SECURITY.md)**.  
+DDoS protection setup: **[docs/ddos-protection.md](docs/ddos-protection.md)**.
 
 ---
 
 ## Troubleshooting
 
-### Server Won't Start
-
-1. **Check logs:**
-   ```bash
-   docker logs rust-server | tail -50
-   ```
-
-2. **Common issues:**
-   - **Port already in use** — Check if another service is on 28015/28016
-   - **Insufficient memory** — Increase Docker memory limit or reduce `MONO_MAX_HEAP`
-   - **Disk space** — Game files require ~6GB; ensure volume has free space
-
-### Players Can't Join
-
-1. **Check firewall** — Port 28015 UDP/TCP must be open to the internet
-2. **Check server port** — Verify `RUST_SERVER_PORT` matches firewall rule (default 28015)
-3. **Check Whitelist** — If Whitelist plugin enabled, player must be granted access or be admin
-4. **Check logs for errors:**
-   ```bash
-   docker exec rust-server grep -i "error\|fail" /var/log/rust/server.log
-   ```
-
-### Oxide Plugins Not Loading
-
-1. **Check plugin directory:**
-   ```bash
-   docker exec rust-server ls /steamcmd/rust/oxide/plugins/
-   ```
-
-2. **Check Oxide logs:**
-   ```bash
-   docker exec rust-server tail -50 /steamcmd/rust/server/oxide/logs/log.txt
-   ```
-
-3. **Verify plugin file permissions:**
-   ```bash
-   docker exec rust-server ls -la /steamcmd/rust/oxide/plugins/
-   ```
-
-4. **Check if plugin is disabled:**
-   ```bash
-   echo $OXIDE_DISABLED_PLUGINS
-   ```
-
----
-
-## Performance Tuning
-
-### CPU Pinning (Two-Phase)
-
-Rust uses two distinct CPU profiles during its lifetime:
-
-- **World generation** — multi-threaded (navmesh, terrain, occlusion grid). Benefits from
-  all available cores. Restricting CPUs here wastes significant startup time.
-- **Game loop** — almost entirely single-threaded. Pinning to dedicated cores eliminates
-  scheduler jitter and reduces player desync on busy servers.
-
-The startup script handles this automatically: world gen runs with no CPU restriction, then
-after the server opens UDP port 28015, `taskset` pins `RustDedicated` to the cores specified
-in `RUST_CPU_CORES`.
-
-**Recommendation:** provision your container/VM with the full core budget you want for world
-gen, then let `RUST_CPU_CORES` narrow the game loop to dedicated cores:
-
 ```bash
-# Kubernetes — give the pod 4 cores, pin game loop to 2 dedicated cores
-resources:
-  requests:
-    cpu: "4"
-  limits:
-    cpu: "4"
-env:
-  - name: RUST_CPU_CORES
-    value: "0,1"
+# Check logs
+docker logs rust-server | tail -50
+
+# Server won't start — typical causes:
+# - Port conflict on 28015/28016
+# - Memory limit below MONO_MAX_HEAP
+# - Volume permissions (must be writable by UID 1000)
+
+# Retrieve auto-generated RCON password
+docker exec rust-server cat /steamcmd/rust/server/rust_server/.rcon.pw
+
+# Plugin status
+docker exec rust-server ls /steamcmd/rust/oxide/plugins/
+docker exec rust-server tail -50 /steamcmd/rust/server/oxide/logs/log.txt
 ```
 
-```bash
-# Docker — same principle
-docker run ... --cpus="4" -e RUST_CPU_CORES="0,1" ...
-```
-
-Leave `RUST_CPU_CORES` empty to let the scheduler assign cores freely (fine for most setups).
-Use even-numbered cores on multi-socket NUMA systems to keep the game loop on one NUMA node.
-
-### Memory Tuning
-
-Adjust Mono GC heap limit based on player count:
-
-| Players | MONO_MAX_HEAP | Notes |
-|---------|---------------|-------|
-| ≤50 | `8g` | Minimum for 50-player |
-| 50–100 | `16g` | Default; good for typical servers |
-| 100–200 | `24g` | Large community servers |
-| >200 | `32g+` | Requires high-spec hardware |
-
-```bash
--e MONO_MAX_HEAP=24g
-```
-
-### Save Interval
-
-Increase `RUST_SERVER_SAVE_INTERVAL` for better performance if disk I/O is a bottleneck:
-
-```bash
-# Save less frequently (default is 300s / 5min)
--e RUST_SERVER_SAVE_INTERVAL=600
-```
+Full troubleshooting: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
 
 ---
 
@@ -554,29 +206,22 @@ Increase `RUST_SERVER_SAVE_INTERVAL` for better performance if disk I/O is a bot
 
 Issues, feature requests, and pull requests welcome on [GitHub](https://github.com/PenguinzTech/penguin-rust-base).
 
-- **Bug reports** — Include Docker version, container logs, and reproduction steps
-- **Plugin requests** — Propose umod.org plugins; must be stable and widely-used
-- **Documentation** — Help improve this README
-
 ---
 
 ## License
 
-Container image: MIT License
-
-Included plugins: Licensed under their respective authors' licenses (see umod.org for details)
-
-Rust and Steam: Licensed by Facepunch Studios. By using this image, you agree to the Rust Server License (see `https://www.rust.facepunch.com/`)
+- **Container image:** MIT License
+- **Bundled plugins:** Their respective authors' licenses (see [umod.org](https://umod.org))
+- **Rust / Steam:** Licensed by Facepunch Studios — by using this image you agree to the [Rust Server License](https://www.rust.facepunch.com/)
 
 ---
 
 ## Support
 
-- **Documentation** — See this README
-- **Rust Server Issues** — [Rust Support](https://support.facepunch.com/)
-- **Oxide Framework** — [Oxide Docs](https://umod.org/documentation)
-- **Plugin Help** — [umod Community](https://umod.org/community)
-- **Image Issues** — [GitHub Issues](https://github.com/PenguinzTech/penguin-rust-base/issues)
+- [GitHub Issues](https://github.com/PenguinzTech/penguin-rust-base/issues) — image-specific issues
+- [Rust Support](https://support.facepunch.com/) — game server issues
+- [Oxide Docs](https://umod.org/documentation) — mod framework
+- [umod Community](https://umod.org/community) — plugin help
 
 ---
 
