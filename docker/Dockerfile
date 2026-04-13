@@ -87,7 +87,6 @@ ENV DDOS_UDP_RATE="60"
 ENV DDOS_UDP_BURST="120"
 
 # SteamCMD requires 32-bit glibc compatibility layer.
-# websocat enables WebSocket RCON commands from start.sh (server.maxplayers, config.save).
 # Create non-root service account before installing files so ownership is clean.
 # DL3008 ignored: community base rebuilds every 4h; pinning apt versions across
 # Debian point releases makes auto-rebuilds brittle without a security benefit.
@@ -102,10 +101,18 @@ RUN dpkg --add-architecture i386 && \
         numactl \
         procps \
         unzip \
-        websocat \
     && rm -rf /var/lib/apt/lists/* && \
     groupadd -r rustserver && \
     useradd -r -g rustserver -u 1000 -m -d /home/rustserver rustserver
+
+# websocat enables WebSocket RCON commands from start.sh (server.maxplayers, config.save).
+# Not packaged for Debian — install static musl binary from upstream GitHub release.
+# Pinned to v1.13.0 (last stable as of image design); update via PR when a new release lands.
+ARG WEBSOCAT_VERSION=1.13.0
+RUN curl -fsSL \
+    "https://github.com/vi/websocat/releases/download/v${WEBSOCAT_VERSION}/websocat.x86_64-unknown-linux-musl" \
+    -o /usr/local/bin/websocat && \
+    chmod +x /usr/local/bin/websocat
 
 # Install SteamCMD under /steamcmd — rustserver will own it
 RUN mkdir -p /steamcmd && \

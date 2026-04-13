@@ -75,12 +75,19 @@ jobs:
           soft-fail: false
 
   # Scan built Docker image for vulnerability findings (CRITICAL, HIGH severity only)
-  # Only runs on push to main (image must be built and pushed to GHCR first)
-  # Does not run on PRs (image not available yet)
+  # Only runs on schedule/manual dispatch — the image must already be built and
+  # pushed to GHCR (handled by build-image.yml on push to main). Running on push
+  # here would race the build workflow and fail with MANIFEST_UNKNOWN.
   trivy-image:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
+      - name: Normalize image name to lowercase
+        id: image
+        env:
+          RAW_IMAGE_NAME: ${{ github.repository }}
+        run: echo "lower=${RAW_IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+
       - name: Login to GHCR
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
         with:
@@ -91,7 +98,7 @@ jobs:
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@264c9c5e188ea085e7377fd77abd17bfbd4e5926
         with:
-          image-ref: ghcr.io/penguintechinc/penguin-rust-base:latest
+          image-ref: ghcr.io/${{ steps.image.outputs.lower }}:latest
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
