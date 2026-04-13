@@ -229,55 +229,103 @@ EOF
     echo "[startup] PVP_MODE=${PVP_MODE:-1} — TruePVE defaultAllowDamage=${_TPVE_ALLOW_DAMAGE} (${_TPVE_LABEL})"
 fi
 
-# ─── Plugin source selection (github=scanned, umod=bypass) ──────────────────
-# PLUGIN_SOURCE=github (default) uses the plugins baked into the image from
-# penguin-rust-plugins (ClamAV/YARA/Semgrep/gitleaks/trivy clean). Hashes are
-# verified at startup against /etc/penguin-rust-plugins/per-plugin/${slug}/${slug}.hash.
-# PLUGIN_SOURCE=umod pulls fresh copies directly from umod.org over the baked
-# ones — bypasses the scan gate, warns loudly. Opt-in for operators who need
-# same-day upstream fixes and accept the trust tradeoff.
+# ─── Plugin provisioning (RUST_PLUGINS + PLUGIN_SOURCE) ──────────────────────────────────────
+PLUGIN_SOURCE="${PLUGIN_SOURCE:-github}"
+RUST_PLUGINS="${RUST_PLUGINS:-}"
+PER_PLUGIN_DIR=/etc/penguin-rust-plugins/per-plugin
+OXIDE_PLUGINS_DIR=/steamcmd/rust/oxide/plugins
+mkdir -p "${OXIDE_PLUGINS_DIR}"
+
+case "${PLUGIN_SOURCE}" in
+    github|umod) ;;
+    *)
+        echo "[startup] FATAL: PLUGIN_SOURCE=${PLUGIN_SOURCE} invalid — must be 'github' or 'umod'" >&2
+        exit 1
+        ;;
+esac
+
+# Build the slug list. If RUST_PLUGINS is empty, use every baked plugin.
+if [ -n "${RUST_PLUGINS}" ]; then
+    SLUGS=$(echo "${RUST_PLUGINS}" | tr ',' ' ' | tr -s ' ')
+    echo "[startup] RUST_PLUGINS explicit list: ${SLUGS}"
+else
+    SLUGS=""
+    for dir in "${PER_PLUGIN_DIR}"/*/; do
+        [ -d "${dir}" ] || continue
+        SLUGS="${SLUGS} $(basename "${dir}")"
+    done
+    echo "[startup] RUST_PLUGINS unset — using all baked plugins: ${SLUGS}"
+fi
+
+fetch_from_umod() {
+    slug="$1"
+    filename=$(curl -fsSL "https://umod.org/plugins/${slug}.json" \
+                | jq -r '.title // empty' \
+                | tr -d ' ' \
+                || true)
+    [ -z "${filename}" ] && filename="${slug}"
+    target="${OXIDE_PLUGINS_DIR}/${filename}.cs"
+    if curl -fsSL "https://umod.org/plugins/${slug}.cs" -o "${target}"; then
+        echo "[startup] fetched umod:${slug} -> ${filename}.cs"
+        return 0
+    fi
+    echo "[startup] WARNING: failed to fetch umod:${slug}" >&2
+    return 1
+}
+
+stage_from_baked() {
+    slug="$1"
+    src_dir="${PER_PLUGIN_DIR}/${slug}"
+    [ -d "${src_dir}" ] || return 1
+    if ! (cd "${src_dir}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
+        echo "[startup] FATAL: ${slug} baked hash mismatch — refusing to stage" >&2
+        return 2
+    fi
+    find "${src_dir}" -maxdepth 1 -name '*.cs' \
+        -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/" \;
+    echo "[startup] staged baked:${slug} (hash verified)"
+    return 0
+}
+
 if [ "${OXIDE:-1}" != "0" ]; then
-    PLUGIN_SOURCE="${PLUGIN_SOURCE:-github}"
-    case "${PLUGIN_SOURCE}" in
-        github)
-            echo "[startup] PLUGIN_SOURCE=github — using scanned plugins baked into image"
-            if [ "${VERIFY_PLUGIN_HASHES:-1}" = "1" ] && [ -d /etc/penguin-rust-plugins/per-plugin ]; then
-                echo "[startup] Verifying plugin hashes against committed manifest..."
-                (
-                    cd /etc/penguin-rust-plugins/per-plugin
-                    for dir in */; do
-                        slug="${dir%/}"
-                        if ! (cd "${slug}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
-                            echo "[startup] FATAL: ${slug} hash mismatch at runtime — refusing to start" >&2
-                            exit 1
-                        fi
-                    done
-                ) || exit 1
-                echo "[startup] All plugin hashes verified."
-            fi
-            ;;
-        umod)
-            echo "[startup] WARNING: PLUGIN_SOURCE=umod — bypassing scan pipeline, pulling directly from umod.org" >&2
-            echo "[startup] WARNING: plugins fetched this way have NOT been scanned by ClamAV/YARA/Semgrep/gitleaks/trivy" >&2
-            if [ -f /etc/penguin-rust-plugins/umod-plugins.txt ]; then
-                while IFS='|' read -r slug filename; do
-                    case "${slug}" in '#'*|'') continue ;; esac
-                    if curl -fsSL "https://umod.org/plugins/${slug}.cs" \
-                        -o "/steamcmd/rust/oxide/plugins/${filename}"; then
-                        echo "[startup] fetched umod:${slug} → ${filename}"
-                    else
-                        echo "[startup] WARNING: failed to fetch umod:${slug} — keeping baked copy" >&2
+    BAKED_COUNT=0
+    FALLBACK_COUNT=0
+    FALLBACK_SLUGS=""
+    for slug in ${SLUGS}; do
+        [ -z "${slug}" ] && continue
+        case "${PLUGIN_SOURCE}" in
+            github)
+                if [ -d "${PER_PLUGIN_DIR}/${slug}" ]; then
+                    stage_from_baked "${slug}"
+                    rc=$?
+                    [ "${rc}" = "2" ] && exit 1
+                    BAKED_COUNT=$((BAKED_COUNT + 1))
+                else
+                    echo "[startup] WARNING: ${slug} not in scanned repo — falling back to umod.org (BYPASSES SCAN PIPELINE)" >&2
+                    if fetch_from_umod "${slug}"; then
+                        FALLBACK_COUNT=$((FALLBACK_COUNT + 1))
+                        FALLBACK_SLUGS="${FALLBACK_SLUGS} ${slug}"
                     fi
-                done < /etc/penguin-rust-plugins/umod-plugins.txt
-            else
-                echo "[startup] WARNING: /etc/penguin-rust-plugins/umod-plugins.txt missing — no plugins refreshed" >&2
-            fi
-            ;;
-        *)
-            echo "[startup] FATAL: PLUGIN_SOURCE=${PLUGIN_SOURCE} invalid — must be 'github' or 'umod'" >&2
-            exit 1
-            ;;
-    esac
+                fi
+                ;;
+            umod)
+                echo "[startup] WARNING: PLUGIN_SOURCE=umod — fetching ${slug} from umod.org (BYPASSES SCAN PIPELINE)" >&2
+                if fetch_from_umod "${slug}"; then
+                    FALLBACK_COUNT=$((FALLBACK_COUNT + 1))
+                    FALLBACK_SLUGS="${FALLBACK_SLUGS} ${slug}"
+                fi
+                ;;
+        esac
+    done
+
+    # Summary line — greppable for ops dashboards and log aggregation.
+    # FALLBACK_COUNT > 0 means at least one plugin bypassed the scan pipeline.
+    FALLBACK_SLUGS="${FALLBACK_SLUGS# }"
+    if [ "${FALLBACK_COUNT}" -gt 0 ]; then
+        echo "[startup] Plugin provisioning complete: ${BAKED_COUNT} baked/verified, ${FALLBACK_COUNT} umod-fallback (UNSCANNED: ${FALLBACK_SLUGS})" >&2
+    else
+        echo "[startup] Plugin provisioning complete: ${BAKED_COUNT} baked/verified, 0 umod-fallback"
+    fi
 fi
 
 # ─── Runtime plugin toggle ───────────────────────────────────────────────────

@@ -172,12 +172,19 @@ jobs:
                   --pattern "${slug}-*.tar.gz" --pattern "${slug}-*.tar.gz.sha256" \
                   --dir "${workdir}"; then
               tarball=$(ls "${workdir}/${slug}-"*.tar.gz)
-              # Integrity: sha256 sidecar published by the plugin workflow. Any mutation
-              # in transit or tampering at rest breaks this check.
-              (cd "${workdir}" && sha256sum -c "$(basename "${tarball}").sha256")
+              # Integrity: sha256 sidecar published by the plugin workflow. We compare
+              # hash fields only (first column) — the path column in the sidecar is
+              # publisher-controlled metadata and not a trust anchor. This also tolerates
+              # sidecars with absolute-path references (older releases, pre-fix).
+              expected_sha=$(awk '{print $1}' "${tarball}.sha256")
+              actual_sha=$(sha256sum "${tarball}" | awk '{print $1}')
+              if [ "${expected_sha}" != "${actual_sha}" ]; then
+                echo "FATAL: sha256 mismatch for ${slug}: expected=${expected_sha} actual=${actual_sha}" >&2
+                exit 1
+              fi
               # Plugin directory layout: tarball root is the staged dir itself.
               tar -xzf "${tarball}" -C "${target}"
-              tarball_sha=$(sha256sum "${tarball}" | awk '{print $1}')
+              tarball_sha="${actual_sha}"
               echo "${slug}|${filename}|${latest_tag}|sha256:${tarball_sha}" \
                 >> docker/plugin-refs.txt.last-good.new
               echo "staged ${slug} from ${latest_tag} (sha256:${tarball_sha})"
@@ -191,7 +198,12 @@ jobs:
                       --pattern "${slug}-*.tar.gz" --pattern "${slug}-*.tar.gz.sha256" \
                       --dir "${workdir}"; then
                   tarball=$(ls "${workdir}/${slug}-"*.tar.gz)
-                  (cd "${workdir}" && sha256sum -c "$(basename "${tarball}").sha256")
+                  expected_sha=$(awk '{print $1}' "${tarball}.sha256")
+                  actual_sha=$(sha256sum "${tarball}" | awk '{print $1}')
+                  if [ "${expected_sha}" != "${actual_sha}" ]; then
+                    echo "FATAL: sha256 mismatch for ${slug} (fallback): expected=${expected_sha} actual=${actual_sha}" >&2
+                    exit 1
+                  fi
                   tar -xzf "${tarball}" -C "${target}"
                   awk -F'|' -v s="${slug}" '$1==s' docker/plugin-refs.txt.last-good \
                     >> docker/plugin-refs.txt.last-good.new

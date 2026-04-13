@@ -67,8 +67,14 @@ ENV RUST_SERVER_FPS=""
 ENV OXIDE="1"
 ENV PVP_MODE="1"
 
-# ─── Plugin source toggle (github=scanned default, umod=bypass at runtime) ──
+# ─── Plugin source & selection ───────────────────────────────────────────────
+# PLUGIN_SOURCE: github (default, scanned) or umod (direct from umod.org, unscanned)
+# RUST_PLUGINS: comma-separated list of umod.org slugs (e.g. truepve,gather-manager).
+#   Empty (default) uses all baked plugins. Non-empty overrides to fetch only those slugs.
+#   If baked plugin exists and PLUGIN_SOURCE=github → use it (hash-verified).
+#   If baked doesn't exist or PLUGIN_SOURCE=umod → fetch from umod.org (scanned bypass warning).
 ENV PLUGIN_SOURCE="github"
+ENV RUST_PLUGINS=""
 
 # ─── Wipe schedule ───────────────────────────────────────────────────────────
 # WIPE_SCHED (blank) = wipe on first Thursday of month (Facepunch forced-wipe day)
@@ -99,6 +105,7 @@ RUN dpkg --add-architecture i386 && \
         ca-certificates \
         curl \
         iptables \
+        jq \
         lib32gcc-s1 \
         numactl \
         procps \
@@ -170,19 +177,23 @@ COPY --chown=rustserver:rustserver staged-plugins/ /etc/penguin-rust-plugins/per
 # to know which slugs to fetch directly from umod.org at runtime (scan-bypass mode).
 COPY --chown=rustserver:rustserver umod-plugins.txt /etc/penguin-rust-plugins/umod-plugins.txt
 
-# Verify every plugin matches its committed hash before staging into oxide/plugins/.
+# Verify every plugin matches its committed hash at build time.
 # Hash mismatch = the OCI artifact was tampered between cosign-sign and our pull —
 # fail the build rather than ship a bad plugin.
+# Plugin staging (copy to oxide/plugins/) is deferred to start.sh so RUST_PLUGINS
+# env var can control which plugins are loaded at runtime.
+# hadolint ignore=DL3003
+# DL3003 (use WORKDIR): intentional — this is a single RUN with bounded, local cd
+# purely to iterate slugs; WORKDIR would leave us in /etc/penguin-rust-plugins/per-plugin
+# for subsequent layers, which is not what we want.
 RUN set -eu; \
-    mkdir -p /steamcmd/rust/oxide/plugins; \
     cd /etc/penguin-rust-plugins/per-plugin; \
     for dir in */; do \
       slug="${dir%/}"; \
       (cd "${slug}" && sha256sum -c "${slug}.hash") \
         || { echo "FATAL: ${slug} hash mismatch — refusing to build" >&2; exit 1; }; \
-      find "${slug}" -maxdepth 1 -name '*.cs' \
-        -exec cp --preserve=mode {} /steamcmd/rust/oxide/plugins/ \; ; \
-    done
+    done; \
+    mkdir -p /steamcmd/rust/oxide/plugins
 
 # ─── Built-in plugins ────────────────────────────────────────────────────────
 # AutoAdmin is baked into the base image so every downstream image gets
