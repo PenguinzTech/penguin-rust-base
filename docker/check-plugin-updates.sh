@@ -133,9 +133,15 @@ for dir in "${PER_PLUGIN_DIR}"/*/; do
     # Update the baked plugin directory
     cp -a "${extract_dir}"/* "${PER_PLUGIN_DIR}/${slug}/"
 
-    # Copy .cs to oxide/plugins/
+    # Copy .cs to oxide/plugins/ (active, uncompressed — Oxide hot-reloads it)
     find "${extract_dir}" -maxdepth 1 -name '*.cs' \
         -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/" \;
+
+    # Refresh compressed copy in disabled/ so next restart doesn't re-download
+    find "${extract_dir}" -maxdepth 1 -name '*.cs' | \
+        while IFS= read -r cs; do \
+            gzip -c "${cs}" > "${OXIDE_PLUGINS_DIR}/disabled/$(basename "${cs}").gz"; \
+        done
 
     # Hot-reload via RCON — Oxide detects file change but explicit reload is faster
     cs_files=$(find "${extract_dir}" -maxdepth 1 -name '*.cs' -exec basename {} .cs \;)

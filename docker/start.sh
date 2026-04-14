@@ -321,8 +321,11 @@ activate_plugin() {
                             fi
 
                             cp -a "${extract_dir}"/* "${src_dir}/"
-                            find "${extract_dir}" -maxdepth 1 -name '*.cs' \
-                                -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/disabled/" \;
+                            # Refresh the compressed copy in disabled/
+                            find "${extract_dir}" -maxdepth 1 -name '*.cs' | \
+                                while IFS= read -r cs; do \
+                                    gzip -c "${cs}" > "${OXIDE_PLUGINS_DIR}/disabled/$(basename "${cs}").gz"; \
+                                done
                             echo "[startup] ${slug}: updated"
                         else
                             echo "[startup] WARNING: failed to download ${slug} update — activating baked version" >&2
@@ -334,23 +337,22 @@ activate_plugin() {
                 fi
             fi
 
-            # Activate: move .cs from disabled/ → oxide/plugins/
+            # Activate: decompress from disabled/ → oxide/plugins/
             local cs_name
             cs_name=$(find "${src_dir}" -maxdepth 1 -name '*.cs' -exec basename {} \; 2>/dev/null | head -1 || true)
             if [ -z "${cs_name}" ]; then
                 echo "[startup] WARNING: no .cs found for ${slug} — skipping" >&2
                 return 1
             fi
-            # Hash-verify before activating (guards against tampered disabled/ files)
+            # Hash-verify the per-plugin copy (always authoritative and uncompressed)
             if ! (cd "${src_dir}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
                 echo "[startup] FATAL: ${slug} hash mismatch — refusing to activate" >&2
                 exit 1
             fi
-            # If the .cs was updated above, disabled/ was refreshed; otherwise it's the baked copy.
-            if [ -f "${OXIDE_PLUGINS_DIR}/disabled/${cs_name}" ]; then
-                mv "${OXIDE_PLUGINS_DIR}/disabled/${cs_name}" "${OXIDE_PLUGINS_DIR}/"
+            if [ -f "${OXIDE_PLUGINS_DIR}/disabled/${cs_name}.gz" ]; then
+                gunzip -c "${OXIDE_PLUGINS_DIR}/disabled/${cs_name}.gz" > "${OXIDE_PLUGINS_DIR}/${cs_name}"
             else
-                # Fallback: copy from per-plugin (e.g. disabled/ was already cleared)
+                # Fallback: copy uncompressed from per-plugin (e.g. disabled/ cleared externally)
                 cp --preserve=mode "${src_dir}/${cs_name}" "${OXIDE_PLUGINS_DIR}/"
             fi
             echo "[startup] activated: ${cs_name}"
