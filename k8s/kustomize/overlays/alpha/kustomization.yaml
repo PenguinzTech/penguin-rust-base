@@ -8,7 +8,7 @@ bases:
 
 # Use local MicroK8s registry
 images:
-  - name: ghcr.io/penguinztechinc/penguin-rust-base
+  - name: ghcr.io/penguinztech/penguin-rust-base
     newName: localhost:32000/penguin-rust-base
     newTag: latest
 

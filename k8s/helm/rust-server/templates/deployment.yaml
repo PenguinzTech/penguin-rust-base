@@ -24,6 +24,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       # Allow 120s for world state flush on SIGTERM (Rust flushes saves on graceful exit)
       terminationGracePeriodSeconds: 120
       securityContext:

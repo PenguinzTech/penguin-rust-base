@@ -6,10 +6,10 @@ namespace: penguin-rust
 bases:
   - ../../base
 
-# Set image tag via: kustomize edit set image ghcr.io/penguinztechinc/penguin-rust-base:beta-<epoch>
+# Set image tag via: kustomize edit set image ghcr.io/penguinztech/penguin-rust-base:beta-<epoch>
 # or override with --set-image flag in deploy-beta.sh
 images:
-  - name: ghcr.io/penguinztechinc/penguin-rust-base
+  - name: ghcr.io/penguinztech/penguin-rust-base
     newTag: latest
 
 patches:

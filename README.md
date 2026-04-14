@@ -48,7 +48,7 @@ docker run -d \
   -p 28015:28015/tcp \
   -p 28016:28016/tcp \
   -e RUST_SERVER_NAME="My Rust Server" \
-  ghcr.io/penguinztechinc/penguin-rust-base:latest
+  ghcr.io/penguinztech/penguin-rust-base:latest
 ```
 
 ### With Admin Access + Persistent Volume
@@ -62,7 +62,7 @@ docker run -d \
   -v rust-data:/steamcmd/rust/server \
   -e RUST_SERVER_NAME="My Rust Server" \
   -e RUST_ADMIN_STEAMIDS="76561198000000000,76561198000000001" \
-  ghcr.io/penguinztechinc/penguin-rust-base:latest
+  ghcr.io/penguinztech/penguin-rust-base:latest
 ```
 
 ### Docker Compose
@@ -70,7 +70,7 @@ docker run -d \
 ```yaml
 services:
   rust:
-    image: ghcr.io/penguinztechinc/penguin-rust-base:latest
+    image: ghcr.io/penguinztech/penguin-rust-base:latest
     container_name: rust-server
     ports:
       - "28015:28015/udp"
@@ -129,12 +129,12 @@ Every build produces two tags:
 
 ```bash
 # Pin to a specific build in production
-FROM ghcr.io/penguinztechinc/penguin-rust-base:1747123456
+FROM ghcr.io/penguinztech/penguin-rust-base:1747123456
 ```
 
 List available tags:
 ```bash
-curl -s https://ghcr.io/v2/penguinztechinc/penguin-rust-base/tags/list | jq '.tags'
+curl -s https://ghcr.io/v2/penguinztech/penguin-rust-base/tags/list | jq '.tags'
 ```
 
 ---
@@ -142,7 +142,7 @@ curl -s https://ghcr.io/v2/penguinztechinc/penguin-rust-base/tags/list | jq '.ta
 ## Extending This Image
 
 ```dockerfile
-FROM ghcr.io/penguinztechinc/penguin-rust-base:1747123456
+FROM ghcr.io/penguinztech/penguin-rust-base:1747123456
 
 # Custom/proprietary plugins
 COPY --chown=rustserver:rustserver my-plugins/ /steamcmd/rust/oxide/plugins/

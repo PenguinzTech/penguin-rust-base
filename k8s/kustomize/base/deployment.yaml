@@ -22,7 +22,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: rust-server
-          image: ghcr.io/penguinztechinc/penguin-rust-base:latest
+          image: ghcr.io/penguinztech/penguin-rust-base:latest
           ports:
             - name: game-udp
               containerPort: 28015

@@ -7,9 +7,9 @@ bases:
   - ../../base
 
 # Production: pin to specific epoch tag or SHA256 digest
-# Example: kustomize edit set image ghcr.io/penguinztechinc/penguin-rust-base:1747123456
+# Example: kustomize edit set image ghcr.io/penguinztech/penguin-rust-base:1747123456
 images:
-  - name: ghcr.io/penguinztechinc/penguin-rust-base
+  - name: ghcr.io/penguinztech/penguin-rust-base
     newTag: latest   # override with immutable tag before deploying to prod
 
 patches:

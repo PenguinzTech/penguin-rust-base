@@ -1,7 +1,10 @@
 image:
-  repository: ghcr.io/penguinztechinc/penguin-rust-base
+  repository: ghcr.io/penguinztech/penguin-rust-base
   tag: "latest"
   pullPolicy: IfNotPresent
+  pullSecrets: []
+  # pullSecrets:
+  #   - name: ghcr-pull-secret
 
 # Namespace — override per environment
 namespace: penguin-rust
