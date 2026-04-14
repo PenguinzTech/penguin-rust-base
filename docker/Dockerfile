@@ -206,7 +206,9 @@ RUN set -eu; \
     find /etc/penguin-rust-plugins/per-plugin -maxdepth 2 -name '*.cs' | \
         while IFS= read -r cs; do \
             gzip -c "${cs}" > "/steamcmd/rust/oxide/plugins/disabled/$(basename "${cs}").gz"; \
-        done
+        done; \
+    find /etc/penguin-rust-plugins/per-plugin -maxdepth 2 -name '*.hash' \
+        -exec cp {} /steamcmd/rust/oxide/plugins/disabled/ \;
 
 # ─── Built-in plugins ────────────────────────────────────────────────────────
 # AutoAdmin is baked into the base image so every downstream image gets

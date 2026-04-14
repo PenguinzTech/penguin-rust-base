@@ -264,96 +264,107 @@ activate_plugin() {
 
     case "${PLUGIN_SOURCE}" in
         github)
-            local src_dir="${PER_PLUGIN_DIR}/${slug}"
-            if [ ! -d "${src_dir}" ]; then
+            local disabled_hash="${OXIDE_PLUGINS_DIR}/disabled/${slug}.hash"
+            if [ ! -f "${disabled_hash}" ]; then
                 echo "[startup] WARNING: ${slug} not in baked plugins — skipping" >&2
                 return 1
             fi
 
+            # Local hash = what was baked into the image (stored alongside the .gz)
             local local_sha
-            local_sha=$(awk '{print $1}' "${src_dir}/${slug}.hash")
+            local_sha=$(awk '{print $1}' "${disabled_hash}")
 
-            # Fetch upstream hash for the latest release of this slug.
+            # Find latest upstream release tag for this slug
             local latest_tag
             latest_tag=$(echo "${_ALL_TAGS}" \
                 | awk -v s="${slug}-" 'index($0,s)==1' \
                 | awk -F- '{print $NF"\t"$0}' | sort -n | tail -1 | cut -f2 || true)
 
+            local upstream_sha=""
             if [ -n "${latest_tag}" ]; then
-                local upstream_sha
                 upstream_sha=$(curl -sfL \
                     "https://github.com/${PLUGINS_REPO}/releases/download/${latest_tag}/${slug}.hash" \
                     | awk '{print $1}' 2>/dev/null || true)
+            fi
 
-                if [ -n "${upstream_sha}" ] && [ "${upstream_sha}" != "${local_sha}" ]; then
-                    echo "[startup] ${slug}: update available (${local_sha:0:12}.. -> ${upstream_sha:0:12}..)"
-                    local tarball_name
-                    tarball_name=$(curl -sf "${GITHUB_API}/releases/tags/${latest_tag}" \
-                        | jq -r '.assets[].name' 2>/dev/null \
-                        | grep "^${slug}-.*\.tar\.gz$" | grep -v '\.sha256$' | head -1 || true)
+            if [ -n "${upstream_sha}" ] && [ "${upstream_sha}" != "${local_sha}" ]; then
+                # Update available — fetch, verify, and activate directly from the
+                # downloaded content (no point decompressing the stale baked .gz)
+                echo "[startup] ${slug}: update available (${local_sha:0:12}.. -> ${upstream_sha:0:12}..)"
+                local tarball_name
+                tarball_name=$(curl -sf "${GITHUB_API}/releases/tags/${latest_tag}" \
+                    | jq -r '.assets[].name' 2>/dev/null \
+                    | grep "^${slug}-.*\.tar\.gz$" | grep -v '\.sha256$' | head -1 || true)
 
-                    if [ -n "${tarball_name}" ]; then
-                        local workdir extract_dir
-                        workdir="$(mktemp -d)"
-                        extract_dir="$(mktemp -d)"
+                if [ -z "${tarball_name}" ]; then
+                    echo "[startup] WARNING: no tarball asset for ${slug} ${latest_tag} — activating baked version" >&2
+                else
+                    local workdir extract_dir
+                    workdir="$(mktemp -d)"
+                    extract_dir="$(mktemp -d)"
 
-                        if curl -sfL \
-                            "https://github.com/${PLUGINS_REPO}/releases/download/${latest_tag}/${tarball_name}" \
-                            -o "${workdir}/${tarball_name}"; then
+                    if curl -sfL \
+                        "https://github.com/${PLUGINS_REPO}/releases/download/${latest_tag}/${tarball_name}" \
+                        -o "${workdir}/${tarball_name}"; then
 
-                            local sidecar_sha actual_sha
-                            sidecar_sha=$(curl -sfL \
-                                "https://github.com/${PLUGINS_REPO}/releases/download/${latest_tag}/${tarball_name}.sha256" \
-                                | awk '{print $1}' || true)
-                            actual_sha=$(sha256sum "${workdir}/${tarball_name}" | awk '{print $1}')
+                        local sidecar_sha actual_sha
+                        sidecar_sha=$(curl -sfL \
+                            "https://github.com/${PLUGINS_REPO}/releases/download/${latest_tag}/${tarball_name}.sha256" \
+                            | awk '{print $1}' || true)
+                        actual_sha=$(sha256sum "${workdir}/${tarball_name}" | awk '{print $1}')
 
-                            if [ -n "${sidecar_sha}" ] && [ "${sidecar_sha}" != "${actual_sha}" ]; then
-                                echo "[startup] FATAL: tarball sha256 mismatch for ${slug} — refusing to update" >&2
-                                rm -rf "${workdir}" "${extract_dir}"
-                                exit 1
-                            fi
-
-                            tar -xzf "${workdir}/${tarball_name}" -C "${extract_dir}"
-                            if ! (cd "${extract_dir}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
-                                echo "[startup] FATAL: ${slug} plugin hash mismatch post-extract — refusing to update" >&2
-                                rm -rf "${workdir}" "${extract_dir}"
-                                exit 1
-                            fi
-
-                            cp -a "${extract_dir}"/* "${src_dir}/"
-                            # Refresh the compressed copy in disabled/
-                            find "${extract_dir}" -maxdepth 1 -name '*.cs' | \
-                                while IFS= read -r cs; do \
-                                    gzip -c "${cs}" > "${OXIDE_PLUGINS_DIR}/disabled/$(basename "${cs}").gz"; \
-                                done
-                            echo "[startup] ${slug}: updated"
-                        else
-                            echo "[startup] WARNING: failed to download ${slug} update — activating baked version" >&2
+                        if [ -n "${sidecar_sha}" ] && [ "${sidecar_sha}" != "${actual_sha}" ]; then
+                            echo "[startup] FATAL: tarball sha256 mismatch for ${slug} — refusing to update" >&2
+                            rm -rf "${workdir}" "${extract_dir}"
+                            exit 1
                         fi
+
+                        tar -xzf "${workdir}/${tarball_name}" -C "${extract_dir}"
+                        if ! (cd "${extract_dir}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
+                            echo "[startup] FATAL: ${slug} plugin hash mismatch post-extract — refusing to update" >&2
+                            rm -rf "${workdir}" "${extract_dir}"
+                            exit 1
+                        fi
+
+                        # Activate directly from the fresh download (already uncompressed)
+                        find "${extract_dir}" -maxdepth 1 -name '*.cs' \
+                            -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/" \;
+
+                        # Update per-plugin and refresh disabled/ (.gz + .hash) for next restart
+                        cp -a "${extract_dir}"/* "${PER_PLUGIN_DIR}/${slug}/"
+                        find "${extract_dir}" -maxdepth 1 -name '*.cs' | \
+                            while IFS= read -r cs; do \
+                                gzip -c "${cs}" > "${OXIDE_PLUGINS_DIR}/disabled/$(basename "${cs}").gz"; \
+                            done
+                        cp "${extract_dir}/${slug}.hash" "${OXIDE_PLUGINS_DIR}/disabled/"
+
+                        echo "[startup] ${slug}: updated and activated"
                         rm -rf "${workdir}" "${extract_dir}"
+                        return 0
                     else
-                        echo "[startup] WARNING: no tarball asset for ${slug} ${latest_tag} — activating baked version" >&2
+                        echo "[startup] WARNING: failed to download ${slug} update — activating baked version" >&2
+                        rm -rf "${workdir}" "${extract_dir}"
                     fi
                 fi
             fi
 
-            # Activate: decompress from disabled/ → oxide/plugins/
+            # Baked version is current (or update failed) — gunzip from disabled/
             local cs_name
-            cs_name=$(find "${src_dir}" -maxdepth 1 -name '*.cs' -exec basename {} \; 2>/dev/null | head -1 || true)
+            cs_name=$(find "${OXIDE_PLUGINS_DIR}/disabled" -maxdepth 1 -name "${slug}*.cs.gz" \
+                -exec basename {} .gz \; 2>/dev/null | head -1 || true)
+            # Fallback: derive cs_name from per-plugin if disabled/ was cleared externally
+            if [ -z "${cs_name}" ]; then
+                cs_name=$(find "${PER_PLUGIN_DIR}/${slug}" -maxdepth 1 -name '*.cs' \
+                    -exec basename {} \; 2>/dev/null | head -1 || true)
+            fi
             if [ -z "${cs_name}" ]; then
                 echo "[startup] WARNING: no .cs found for ${slug} — skipping" >&2
                 return 1
             fi
-            # Hash-verify the per-plugin copy (always authoritative and uncompressed)
-            if ! (cd "${src_dir}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
-                echo "[startup] FATAL: ${slug} hash mismatch — refusing to activate" >&2
-                exit 1
-            fi
             if [ -f "${OXIDE_PLUGINS_DIR}/disabled/${cs_name}.gz" ]; then
                 gunzip -c "${OXIDE_PLUGINS_DIR}/disabled/${cs_name}.gz" > "${OXIDE_PLUGINS_DIR}/${cs_name}"
             else
-                # Fallback: copy uncompressed from per-plugin (e.g. disabled/ cleared externally)
-                cp --preserve=mode "${src_dir}/${cs_name}" "${OXIDE_PLUGINS_DIR}/"
+                cp --preserve=mode "${PER_PLUGIN_DIR}/${slug}/${cs_name}" "${OXIDE_PLUGINS_DIR}/"
             fi
             echo "[startup] activated: ${cs_name}"
             ;;

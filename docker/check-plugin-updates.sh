@@ -137,11 +137,12 @@ for dir in "${PER_PLUGIN_DIR}"/*/; do
     find "${extract_dir}" -maxdepth 1 -name '*.cs' \
         -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/" \;
 
-    # Refresh compressed copy in disabled/ so next restart doesn't re-download
+    # Refresh compressed copy + hash in disabled/ so next restart doesn't re-download
     find "${extract_dir}" -maxdepth 1 -name '*.cs' | \
         while IFS= read -r cs; do \
             gzip -c "${cs}" > "${OXIDE_PLUGINS_DIR}/disabled/$(basename "${cs}").gz"; \
         done
+    cp "${extract_dir}/${slug}.hash" "${OXIDE_PLUGINS_DIR}/disabled/"
 
     # Hot-reload via RCON — Oxide detects file change but explicit reload is faster
     cs_files=$(find "${extract_dir}" -maxdepth 1 -name '*.cs' -exec basename {} .cs \;)
