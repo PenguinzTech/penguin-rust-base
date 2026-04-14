@@ -15,6 +15,9 @@
 # =============================================================================
 set -uo pipefail
 
+# shellcheck source=lib-functions.sh
+. /usr/local/lib/penguin-rust/lib-functions.sh
+
 # ─── Guards ─────────────────────────────────────────────────────────────────
 if ! pgrep -f RustDedicated >/dev/null 2>&1; then
     exit 0
@@ -56,23 +59,7 @@ case "${WIPE_SCHED:-}" in
         ;;
 esac
 
-# ─── RCON helper ────────────────────────────────────────────────────────────
-if [ -z "${RUST_RCON_PASSWORD:-}" ]; then
-    RCON_PW_FILE="/steamcmd/rust/server/${_W_IDENT}/.rcon.pw"
-    if [ -f "${RCON_PW_FILE}" ]; then
-        RUST_RCON_PASSWORD=$(cat "${RCON_PW_FILE}")
-    fi
-fi
-
-send_rcon() {
-    local cmd="$1"
-    [ -z "${RUST_RCON_PASSWORD:-}" ] && return 0
-    command -v websocat >/dev/null 2>&1 || return 0
-    printf '{"Identifier":1,"Message":"%s","Name":"wipe-check"}\n' "${cmd}" | \
-        websocat -n1 --no-close --timeout 5 \
-        "ws://127.0.0.1:${RUST_RCON_PORT:-28016}/${RUST_RCON_PASSWORD}" \
-        >/dev/null 2>&1 || true
-}
+load_rcon_password
 
 # ─── Wipe sequence (60-minute warning countdown) ────────────────────────────
 bp="${WIPE_BP:-false}"

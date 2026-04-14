@@ -209,6 +209,10 @@ RUN set -eu; \
 # automatic permission provisioning and admin group management.
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
 
+# ─── Shared library ─────────────────────────────────────────────────────────
+# Functions sourced by start.sh, check-plugin-updates.sh, and wipe-check.sh.
+COPY --chown=rustserver:rustserver lib-functions.sh /usr/local/lib/penguin-rust/lib-functions.sh
+
 # ─── Scheduled tasks (supercronic) ──────────────────────────────────────────
 # Base crontab has static entries (plugin update checker). start.sh appends
 # dynamic entries (wipe schedule) computed from env vars at boot.

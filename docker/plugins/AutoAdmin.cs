@@ -67,6 +67,11 @@ namespace Oxide.Plugins
                 "waterbases.vip4", "waterbases.vip5",
             },
             ["Whitelist"] = new[] { "whitelist.allow" },
+            ["SafeSpace"] = new[]
+            {
+                "safespace.signs", "safespace.globalchat",
+                "safespace.voice", "safespace.notes",
+            },
         };
 
         // Plugins whose permissions are generated at runtime from config files

@@ -17,3 +17,4 @@ night-lantern|NightLantern.cs
 truepve|TruePVE.cs
 stack-size-controller|StackSizeController.cs
 whitelist|Whitelist.cs
+safespace|SafeSpace.cs
