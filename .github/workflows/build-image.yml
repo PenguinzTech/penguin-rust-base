@@ -1,9 +1,9 @@
 name: Build & Push Rust Server Base Image
 
 on:
-  # Poll every 4 hours for Oxide and Steam updates
+  # Daily check for Oxide and Steam updates (06:00 UTC)
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 6 * * *'
   # Rebuild immediately when image-affecting code lands on main.
   # Scoped to paths that change image contents — docs/README/security.yml
   # changes don't require a new image.
