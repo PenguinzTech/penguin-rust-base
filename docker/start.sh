@@ -264,12 +264,31 @@ fetch_from_umod() {
                 | tr -d ' ' \
                 || true)
     [ -z "${filename}" ] && filename="${slug}"
+
+    # Try .cs first (90%+ of umod plugins)
     target="${OXIDE_PLUGINS_DIR}/${filename}.cs"
-    if curl -fsSL "https://umod.org/plugins/${slug}.cs" -o "${target}"; then
+    if curl -fsSL "https://umod.org/plugins/${slug}.cs" -o "${target}" 2>/dev/null; then
         echo "[startup] fetched umod:${slug} -> ${filename}.cs"
         return 0
     fi
-    echo "[startup] WARNING: failed to fetch umod:${slug}" >&2
+
+    # Fallback: some plugins are distributed as .zip (extract .cs from inside)
+    zip_tmp="$(mktemp -d)"
+    if curl -fsSL "https://umod.org/plugins/${slug}.zip" -o "${zip_tmp}/${slug}.zip" 2>/dev/null; then
+        if unzip -qo "${zip_tmp}/${slug}.zip" -d "${zip_tmp}/extracted" 2>/dev/null; then
+            cs_count=$(find "${zip_tmp}/extracted" -name '*.cs' | wc -l)
+            if [ "${cs_count}" -gt 0 ]; then
+                find "${zip_tmp}/extracted" -name '*.cs' \
+                    -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/" \;
+                echo "[startup] fetched umod:${slug} -> extracted ${cs_count} .cs from .zip"
+                rm -rf "${zip_tmp}"
+                return 0
+            fi
+        fi
+    fi
+    rm -rf "${zip_tmp}"
+
+    echo "[startup] WARNING: failed to fetch umod:${slug} (.cs and .zip both failed)" >&2
     return 1
 }
 
