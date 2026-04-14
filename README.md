@@ -5,7 +5,7 @@
 [![Security](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/security.yml/badge.svg)](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/security.yml)
 [![Build](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/build-image.yml/badge.svg)](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/build-image.yml)
 
-A production-ready Docker image for Rust dedicated game servers with Oxide mod framework and 11 pre-installed plugins. Game files (~6GB) are baked at build time to eliminate first-boot download waits. Automatically rebuilds every 4 hours when Oxide or Steam updates, with daily checks for plugin updates.
+A production-ready Docker image for Rust dedicated game servers with Oxide mod framework and plugins baked in. Game files (~6GB) are baked at build time to eliminate first-boot download waits. Automatically rebuilds every 4 hours when Oxide or Steam updates, with startup-time checks for plugin updates.
 
 Perfect for operators, communities, and teams extending with proprietary plugins via `FROM`.
 
@@ -17,7 +17,7 @@ Perfect for operators, communities, and teams extending with proprietary plugins
 
 - **Rust Dedicated Server** — Steam app 258550, latest version
 - **Oxide Mod Framework** — Auto-updated every 4 hours
-- **11 Pre-Installed Plugins** (from umod.org):
+- **Pre-Installed Plugins** — all plugins published to [penguin-rust-plugins](https://github.com/PenguinzTech/penguin-rust-plugins) are automatically baked in on every image build (no static list to maintain):
   - **AdminUtilities** — Admin commands (noclip, god mode, kick, ban, give, spawn)
   - **BGrade** — Automatically upgrade building grades
   - **CopyPaste** — Copy and paste buildings
@@ -106,6 +106,8 @@ All settings are controlled via environment variables. The most commonly set one
 | `RUST_RCON_PASSWORD` | *(auto-generated)* | RCON password; generated and persisted to PVC if unset |
 | `RUST_ADMIN_STEAMIDS` | *(none)* | Comma-separated admin Steam IDs |
 | `WIPE_SCHED` | *(first Thu of month)* | `1w`, `2w`, `3w`, or `off` |
+| `PLUGIN_SOURCE` | `github` | `github` (baked→GitHub→umod chain), `baked` (no network), or `umod` (always umod.org) |
+| `PLUGIN_UMOD_FALLBACK` | `1` | In `github` mode, fall back to umod.org for slugs not in penguin-rust-plugins (`0` to disable) |
 
 📖 **Everything else** — browser listing (description, tags, URL, logo), server behaviour (PvE, radiation, tickrate), wipe schedule details, DDoS protection, admin provisioning, plugin toggles, auto-config tiers, performance tuning — is documented in **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
 
@@ -154,11 +156,40 @@ ENV RUST_SERVER_NAME="My Custom Server"
 
 ---
 
+## Plugin Caching
+
+Plugins are baked into the image as gzip-compressed `.cs.gz` files alongside a `.hash` sidecar. This serves two purposes:
+
+**Startup speed** — On every boot, `start.sh` compares the baked hash against the latest release in `penguin-rust-plugins`. If they match, the plugin is decompressed and activated in milliseconds from the local layer — no network round-trip. Only plugins that have been updated since the image was built are downloaded at startup.
+
+**Efficient layer sharing for multi-server providers** — All plugin `.cs.gz` files live in a single immutable Docker layer. Hosts running many Rust server containers (or different server images built `FROM` this base) share that layer on disk and in the registry pull cache. Plugins are only decompressed into the container's writable layer when activated, so the compressed originals remain shared.
+
+```
+oxide/plugins/disabled/     ← shared, compressed, in image layer
+    truepve.cs.gz
+    truepve.hash
+    whitelist.cs.gz
+    whitelist.hash
+    ...
+
+oxide/plugins/              ← per-container writable layer, uncompressed
+    TruePVE.cs              ← only after RUST_PLUGINS=truepve
+    Whitelist.cs
+```
+
+Plugins are disabled by default. Set `RUST_PLUGINS` to activate specific ones:
+
+```bash
+-e RUST_PLUGINS="truepve,whitelist,vanish"
+```
+
+---
+
 ## Automatic Updates
 
 - **Every 4 hours** — check Oxide and Steam for updates, rebuild if changed
-- **Every 24 hours** — check umod plugin versions, rebuild if changed
 - **On dispatch** — manual `gh workflow run build.yml`
+- **On startup** — compare baked plugin hashes against latest `penguin-rust-plugins` releases; download updates only when needed
 
 ---
 

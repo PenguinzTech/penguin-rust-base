@@ -68,12 +68,20 @@ ENV OXIDE="1"
 ENV PVP_MODE="1"
 
 # ─── Plugin source & selection ───────────────────────────────────────────────
-# PLUGIN_SOURCE: github (default, scanned) or umod (direct from umod.org, unscanned)
-# RUST_PLUGINS: comma-separated list of umod.org slugs (e.g. truepve,gather-manager).
-#   Empty (default) uses all baked plugins. Non-empty overrides to fetch only those slugs.
-#   If baked plugin exists and PLUGIN_SOURCE=github → use it (hash-verified).
-#   If baked doesn't exist or PLUGIN_SOURCE=umod → fetch from umod.org (scanned bypass warning).
+# PLUGIN_SOURCE controls the resolution strategy for plugins in RUST_PLUGINS:
+#   github (default) — full priority chain: baked (hash-checked) → GitHub release
+#                      → umod fallback (if PLUGIN_UMOD_FALLBACK=1) → skip
+#   baked            — baked plugins only; no network calls (fastest cold start)
+#   umod             — always fetch direct from umod.org (bypasses scan pipeline)
+#
+# PLUGIN_UMOD_FALLBACK: in github mode, whether to try umod.org when a slug is not
+#   found in penguin-rust-plugins releases (default 1 = enabled).
+#   Set to 0 to disable umod entirely and hard-fail on unknown slugs.
+#
+# RUST_PLUGINS: comma-separated slug list (e.g. truepve,gather-manager).
+#   Empty (default) leaves all plugins disabled. Non-empty activates listed slugs.
 ENV PLUGIN_SOURCE="github"
+ENV PLUGIN_UMOD_FALLBACK="1"
 ENV RUST_PLUGINS=""
 
 # ─── Wipe schedule ───────────────────────────────────────────────────────────
@@ -202,7 +210,13 @@ RUN set -eu; \
       (cd "${slug}" && sha256sum -c "${slug}.hash") \
         || { echo "FATAL: ${slug} hash mismatch — refusing to build" >&2; exit 1; }; \
     done; \
-    mkdir -p /steamcmd/rust/oxide/plugins
+    mkdir -p /steamcmd/rust/oxide/plugins/disabled; \
+    find /etc/penguin-rust-plugins/per-plugin -maxdepth 2 -name '*.cs' | \
+        while IFS= read -r cs; do \
+            gzip -c "${cs}" > "/steamcmd/rust/oxide/plugins/disabled/$(basename "${cs}").gz"; \
+        done; \
+    find /etc/penguin-rust-plugins/per-plugin -maxdepth 2 -name '*.hash' \
+        -exec cp {} /steamcmd/rust/oxide/plugins/disabled/ \;
 
 # ─── Built-in plugins ────────────────────────────────────────────────────────
 # AutoAdmin is baked into the base image so every downstream image gets

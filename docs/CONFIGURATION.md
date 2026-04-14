@@ -97,6 +97,9 @@ Enabling `DDOS_PROTECT=1` requires `NET_ADMIN` on the container (`--cap-add=NET_
 | `RUST_CPU_CORES` | *(none)* | CPU cores for game-loop pinning (e.g. `0,1`); leave blank to skip |
 | `RUST_MAXPLAYERS_CHECK_INTERVAL` | `1800` | Seconds between RSS-based maxPlayers adjustments; `0` to disable |
 | `OXIDE_DISABLED_PLUGINS` | *(none)* | Comma-separated plugin names to disable at runtime |
+| `RUST_PLUGINS` | *(none)* | Comma-separated slugs to activate (empty = all stay disabled) |
+| `PLUGIN_SOURCE` | `github` | Plugin resolution strategy — see table below |
+| `PLUGIN_UMOD_FALLBACK` | `1` | In `github` mode, fall back to umod.org when slug not in penguin-rust-plugins; `0` to disable |
 | `RUST_SERVER_EXTRA_ARGS` | *(none)* | Additional arguments passed verbatim to `RustDedicated` |
 
 ---
@@ -259,6 +262,34 @@ file and let the script generate a new one.
 
 ---
 
+## Plugin Resolution
+
+### PLUGIN_SOURCE — resolution strategy
+
+Controls how `RUST_PLUGINS` slugs are resolved at startup:
+
+| `PLUGIN_SOURCE` | Resolution chain |
+|---|---|
+| `github` (default) | **1.** Baked (gunzip if hash current; download update if stale) → **2.** GitHub release (if not baked) → **3.** umod.org (if `PLUGIN_UMOD_FALLBACK=1`) → **4.** Skip with warning |
+| `baked` | Baked only — no network calls. Fastest cold start. Unknown slugs are skipped. |
+| `umod` | Always fetches fresh from umod.org regardless of what's baked. **Bypasses the scan pipeline — use with caution.** |
+
+### PLUGIN_UMOD_FALLBACK
+
+In `github` mode, controls whether umod.org is tried when a slug has no release in `penguin-rust-plugins`:
+
+```bash
+# Disable umod fallback (strict mode — only scanned plugins)
+-e PLUGIN_UMOD_FALLBACK=0
+
+# Enable umod fallback (default) — convenient for community plugins not yet in the pipeline
+-e PLUGIN_UMOD_FALLBACK=1
+```
+
+Setting `PLUGIN_UMOD_FALLBACK=0` is recommended in production when you want to guarantee every activated plugin passed through the security scan pipeline.
+
+---
+
 ## Runtime Plugin Toggle
 
 ### OXIDE_DISABLED_PLUGINS
@@ -296,56 +327,6 @@ oxide.grant user 76561198000000000 whitelist.allow
 
 Admins (from `RUST_ADMIN_STEAMIDS`) bypass the whitelist by default via the
 `Admin Excluded = true` setting in `oxide/data/Whitelist.json`.
-
-### SafeSpace plugin (kid-friendly mode)
-
-The **SafeSpace** plugin enforces team-only communication by default. All channels
-that reach beyond a player's team are blocked unless the player has a specific permission.
-
-| Feature | Blocked by default | Bypass permission |
-|---------|-------------------|-------------------|
-| Sign / photo frame painting | Yes | `safespace.signs` |
-| Global chat | Yes (team chat always works) | `safespace.globalchat` |
-| Voice chat | Yes | `safespace.voice` |
-| Note writing | Yes | `safespace.notes` |
-
-**Admins** (from `RUST_ADMIN_STEAMIDS`) are automatically granted all SafeSpace
-permissions via AutoAdmin — they can use all features without extra configuration.
-
-**Grant features to trusted players via RCON:**
-```bash
-# Allow a player to use global chat
-oxide.grant user 76561198000000000 safespace.globalchat
-
-# Allow a group to paint signs
-oxide.grant group trusted safespace.signs
-
-# Allow all features for a player
-oxide.grant user 76561198000000000 safespace.signs
-oxide.grant user 76561198000000000 safespace.globalchat
-oxide.grant user 76561198000000000 safespace.voice
-oxide.grant user 76561198000000000 safespace.notes
-```
-
-**Disable individual restrictions** (allow for everyone without permissions):
-
-Edit `oxide/config/SafeSpace.json`:
-```json
-{
-  "BlockSigns": true,
-  "BlockGlobalChat": false,
-  "BlockVoice": true,
-  "BlockNotes": true
-}
-```
-
-**Disable the plugin entirely:**
-```bash
--e OXIDE_DISABLED_PLUGINS="SafeSpace"
-```
-
-**Player status command:** Players can type `/safespace` in chat to see which
-features they have access to.
 
 ---
 
