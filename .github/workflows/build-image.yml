@@ -1,9 +1,16 @@
 name: Build & Push Rust Server Base Image
 
 on:
-  # Daily check for Oxide and Steam updates (06:00 UTC)
   schedule:
-    - cron: '0 6 * * *'
+    # Every 12 hours — general Oxide/Steam update detection
+    - cron: '0 */12 * * *'
+    # Facepunch forced-wipe: first Thursday of the month, 19:00 London time.
+    # GitHub cron can't express "first Thursday" so we fire every Thursday;
+    # non-wipe Thursdays are a no-op (~10s check-updates, no build).
+    # BST (Mar–Oct): 19:02 London = 18:02 UTC
+    # GMT (Oct–Mar): 19:02 London = 19:02 UTC
+    - cron: '2 18 * * 4'
+    - cron: '2 19 * * 4'
   # Rebuild immediately when image-affecting code lands on main.
   # Scoped to paths that change image contents — docs/README/security.yml
   # changes don't require a new image.
