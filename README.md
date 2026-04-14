@@ -106,6 +106,8 @@ All settings are controlled via environment variables. The most commonly set one
 | `RUST_RCON_PASSWORD` | *(auto-generated)* | RCON password; generated and persisted to PVC if unset |
 | `RUST_ADMIN_STEAMIDS` | *(none)* | Comma-separated admin Steam IDs |
 | `WIPE_SCHED` | *(first Thu of month)* | `1w`, `2w`, `3w`, or `off` |
+| `PLUGIN_SOURCE` | `github` | `github` (baked→GitHub→umod chain), `baked` (no network), or `umod` (always umod.org) |
+| `PLUGIN_UMOD_FALLBACK` | `1` | In `github` mode, fall back to umod.org for slugs not in penguin-rust-plugins (`0` to disable) |
 
 📖 **Everything else** — browser listing (description, tags, URL, logo), server behaviour (PvE, radiation, tickrate), wipe schedule details, DDoS protection, admin provisioning, plugin toggles, auto-config tiers, performance tuning — is documented in **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)**.
 
