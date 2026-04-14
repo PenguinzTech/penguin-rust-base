@@ -123,6 +123,15 @@ RUN curl -fsSL \
     -o /usr/local/bin/websocat && \
     chmod +x /usr/local/bin/websocat
 
+# supercronic — cron for containers. Runs as non-root, logs to stdout, reads
+# standard crontab syntax. Used for plugin update checks, future scheduled tasks.
+# Pinned to v0.2.44 (last stable as of 2026-03); update via PR when new release lands.
+ARG SUPERCRONIC_VERSION=0.2.44
+RUN curl -fsSL \
+    "https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
+    -o /usr/local/bin/supercronic && \
+    chmod +x /usr/local/bin/supercronic
+
 # Install SteamCMD under /steamcmd — rustserver will own it
 RUN mkdir -p /steamcmd && \
     curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" \
@@ -199,6 +208,14 @@ RUN set -eu; \
 # AutoAdmin is baked into the base image so every downstream image gets
 # automatic permission provisioning and admin group management.
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
+
+# ─── Scheduled tasks (supercronic) ──────────────────────────────────────────
+# Base crontab has static entries (plugin update checker). start.sh appends
+# dynamic entries (wipe schedule) computed from env vars at boot.
+COPY --chown=rustserver:rustserver crontab /etc/penguin-rust/crontab
+COPY --chown=rustserver:rustserver check-plugin-updates.sh /usr/local/bin/check-plugin-updates.sh
+COPY --chown=rustserver:rustserver wipe-check.sh /usr/local/bin/wipe-check.sh
+RUN chmod +x /usr/local/bin/check-plugin-updates.sh /usr/local/bin/wipe-check.sh
 
 # ─── Startup script ──────────────────────────────────────────────────────────
 COPY --chown=rustserver:rustserver start.sh /start.sh

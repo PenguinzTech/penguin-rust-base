@@ -1,0 +1,24 @@
+# Penguin Rust — supercronic crontab
+# Runs as rustserver (non-root). Logs to stdout (visible in kubectl logs).
+#
+# Static entries are baked here. start.sh appends dynamic entries (soft-wipe
+# schedule) computed from WIPE_SCHED/WIPE_DAY/WIPE_TIME env vars at boot.
+
+# ─── Plugin live-update checker ─────────────────────────────────────────────
+# Compare baked hashes against upstream releases every 5 minutes.
+# Only acts when PLUGIN_SOURCE=github and an update exists.
+*/5 * * * * /usr/local/bin/check-plugin-updates.sh
+
+# ─── Facepunch forced wipe ──────────────────────────────────────────────────
+# First Thursday of month, 19:00 London time. Warning sequence starts 60 min
+# before. wipe-check.sh has a dom<=7 guard so non-first Thursdays are skipped.
+#
+# BST (Mar–Oct): 19:00 London = 18:00 UTC → warnings at 17:00 UTC
+# GMT (Oct–Mar): 19:00 London = 19:00 UTC → warnings at 18:00 UTC
+# Both entries are present; wrong-season fires and exits immediately (dom>7
+# or stamp file already written by the correct-season entry minutes earlier).
+0 17 * * 4 /usr/local/bin/wipe-check.sh
+0 18 * * 4 /usr/local/bin/wipe-check.sh
+
+# ─── Soft wipes (appended by start.sh at boot) ─────────────────────────────
+# WIPE_SCHED=1w|2w|3w entries are added below this line dynamically.

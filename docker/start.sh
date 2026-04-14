@@ -414,6 +414,8 @@ send_rcon() {
 # terminationGracePeriodSeconds in values.yaml must be >= server.saveinterval.
 _term() {
     echo "[startup] SIGTERM received — sending save + quit to server..."
+    # Stop supercronic first so no scheduled tasks fire during shutdown
+    kill -TERM "${SUPERCRONIC_PID:-}" 2>/dev/null || true
     # If RCON password is set, use it to gracefully save before exit
     send_rcon "server.save"
     kill -TERM "$SERVER_PID" 2>/dev/null || true
@@ -533,142 +535,64 @@ if [ -n "${RUST_RCON_PASSWORD:-}" ] && [ "${_MP_INTERVAL}" -gt 0 ]; then
     ) &
 fi
 
-# ─── Wipe schedule watcher ───────────────────────────────────────────────────
-# Polls on a 30-second tick; deletes server save data and sends SIGTERM when
-# the configured schedule fires. Container restart policy then starts fresh.
-#
-# WIPE_SCHED (unset)  — first Thursday of month only (Facepunch forced-wipe day)
-# WIPE_SCHED=1w|2w|3w — every N weeks on WIPE_DAY
-# WIPE_SCHED=off      — disable all automated wipes
-# WIPE_DAY=Th         — day: M Tu W Th F Sa Su (default: Th)
-# WIPE_TIME=06:00     — UTC time to trigger (default: 06:00)
-# WIPE_BP=false       — also delete player blueprints (default: false)
-#                       Note: first-Thursday wipes always delete blueprints.
-#
-# Wipe = delete proceduralmap.*.{map,sav,db} + optionally player.blueprints.*.db,
-# write a stamp file so a same-day restart doesn't re-wipe, then stop the server.
-if [ "${WIPE_SCHED:-}" != "off" ]; then
-    _W_DAY="${WIPE_DAY:-Th}"
-    _W_TIME="${WIPE_TIME:-06:00}"
-    _W_BP="${WIPE_BP:-false}"
-    _W_IDENT="${RUST_SERVER_IDENTITY:-rust_server}"
-    _W_DIR="/steamcmd/rust/server/${_W_IDENT}"
-    _W_STAMP="${_W_DIR}/.last-wipe"
+# ─── Supercronic (scheduled tasks) ──────────────────────────────────────────
+# Static crontab has: plugin update checker (*/5) + Facepunch forced-wipe
+# (first Thursday, 17:00+18:00 UTC to cover BST/GMT).
+# start.sh appends soft-wipe entries when WIPE_SCHED=1w|2w|3w.
+cp /etc/penguin-rust/crontab /tmp/crontab
 
-    # Warning sequence starts 60 minutes before WIPE_TIME (actual wipe).
-    # _W_TRIGGER is the HH:MM at which _wipe_run fires — 60 min before _W_TIME.
-    # Handles day-rollover (e.g. WIPE_TIME=00:30 → trigger 23:30 previous day);
-    # in that rare case we accept that the trigger-day check uses the prior day.
-    _W_TRIGGER=$(date -u -d "1970-01-01 ${_W_TIME} UTC - 60 minutes" +%H:%M 2>/dev/null || echo "05:00")
+echo "[startup] Facepunch forced-wipe: first Thursday of month, 19:00 London (baked in crontab)"
 
-    case "${_W_DAY}" in
-        M|Mo|Mon) _W_DOW=1 ;;
-        Tu|Tue)   _W_DOW=2 ;;
-        W|We|Wed) _W_DOW=3 ;;
-        Th|Thu)   _W_DOW=4 ;;
-        F|Fr|Fri) _W_DOW=5 ;;
-        Sa|Sat)   _W_DOW=6 ;;
-        Su|Sun)   _W_DOW=7 ;;
-        *)        _W_DOW=4 ;;
-    esac
+case "${WIPE_SCHED:-}" in
+    off)
+        echo "[startup] Soft-wipe schedule disabled (WIPE_SCHED=off)"
+        ;;
+    1w|2w|3w)
+        _W_DAY="${WIPE_DAY:-Th}"
+        _W_TIME="${WIPE_TIME:-06:00}"
+        _W_HOUR="${_W_TIME%%:*}"
+        _W_MIN="${_W_TIME##*:}"
 
-    (
-        _wipe_due() {
-            local today dow dom epoch_weeks interval
-            today=$(date -u +%Y-%m-%d)
-            # Never wipe twice on the same calendar day
-            if [ -f "${_W_STAMP}" ] && [ "$(cat "${_W_STAMP}")" = "${today}" ]; then
-                return 1
-            fi
-            # Check time window — fire 60 min before WIPE_TIME so the warning
-            # sequence ends exactly at WIPE_TIME.
-            if [ "$(date -u +%H:%M)" != "${_W_TRIGGER}" ]; then
-                return 1
-            fi
-            dow=$(date -u +%u)
-            dom=$(date -u +%-d)
-            if [ -z "${WIPE_SCHED:-}" ]; then
-                # Default: align with Facepunch forced-wipe (first Thursday of month)
-                if [ "${dow}" -eq 4 ] && [ "${dom}" -le 7 ]; then
-                    return 0
-                fi
-                return 1
-            fi
-            # Custom schedule: check day-of-week
-            if [ "${dow}" -ne "${_W_DOW}" ]; then
-                return 1
-            fi
-            # Check interval for 2w/3w
-            case "${WIPE_SCHED:-}" in
-                2w) interval=2 ;;
-                3w) interval=3 ;;
-                *)  return 0 ;;
-            esac
-            epoch_weeks=$(( $(date -u +%s) / 604800 ))
-            if [ $(( epoch_weeks % interval )) -eq 0 ]; then
-                return 0
-            fi
-            return 1
-        }
+        # Trigger time = WIPE_TIME - 60 min (warning sequence start)
+        _TRIGGER_TOTAL=$(( (10#${_W_HOUR} * 60 + 10#${_W_MIN}) - 60 ))
+        if [ "${_TRIGGER_TOTAL}" -lt 0 ]; then
+            _TRIGGER_TOTAL=$(( _TRIGGER_TOTAL + 1440 ))
+        fi
+        _TRIGGER_H=$(( _TRIGGER_TOTAL / 60 ))
+        _TRIGGER_M=$(( _TRIGGER_TOTAL % 60 ))
 
-        _wipe_run() {
-            local today dom dow bp
-            today=$(date -u +%Y-%m-%d)
-            dom=$(date -u +%-d)
-            dow=$(date -u +%u)
-            bp="${_W_BP}"
-            # First-Thursday of month: always wipe blueprints (Facepunch forced wipe)
-            if [ "${dow}" -eq 4 ] && [ "${dom}" -le 7 ]; then
-                bp=true
-            fi
-            echo "[wipe] Wipe triggered — blueprint_wipe=${bp} (warnings start now, wipe in 60 min)"
-            # Hourly lead: warnings at T-60, T-50, T-40, T-30, T-20, T-10, T-5, T-1 min.
-            # Sleeps between broadcasts total 60 min; send_rcon failures are logged but
-            # never abort the sequence — the wipe MUST happen even if RCON is down.
-            send_rcon "say [SERVER] Scheduled server wipe in 60 minutes — plan accordingly!"
-            sleep 600   # → T-50
-            send_rcon "say [SERVER] Server wipe in 50 minutes."
-            sleep 600   # → T-40
-            send_rcon "say [SERVER] Server wipe in 40 minutes."
-            sleep 600   # → T-30
-            send_rcon "say [SERVER] Server wipe in 30 minutes."
-            sleep 600   # → T-20
-            send_rcon "say [SERVER] Server wipe in 20 minutes."
-            sleep 600   # → T-10
-            send_rcon "say [SERVER] Server wipe in 10 minutes — wrap up your runs!"
-            sleep 300   # → T-5
-            send_rcon "say [SERVER] Server wipe in 5 minutes!"
-            sleep 240   # → T-1
-            send_rcon "say [SERVER] Server wipe in 60 seconds!"
-            sleep 55    # → T-5s
-            send_rcon "say [SERVER] Wiping now — see you on the new map!"
-            sleep 5
-            send_rcon "server.save"
-            sleep 3
-            # Delete map and save data
-            rm -f "${_W_DIR}"/proceduralmap.*.map \
-                  "${_W_DIR}"/proceduralmap.*.sav \
-                  "${_W_DIR}"/proceduralmap.*.db 2>/dev/null || true
-            if [ "${bp}" = "true" ]; then
-                echo "[wipe] Wiping blueprints..."
-                rm -f "${_W_DIR}"/player.blueprints.*.db 2>/dev/null || true
-            fi
-            # Stamp before SIGTERM so a fast container restart does not re-wipe
-            mkdir -p "${_W_DIR}"
-            printf '%s\n' "${today}" > "${_W_STAMP}"
-            echo "[wipe] Save data deleted — stopping server for clean restart"
-            kill -TERM "${SERVER_PID}" 2>/dev/null || true
-        }
+        # Map day abbreviation to cron DOW (0=Sun, 1=Mon, ..., 6=Sat)
+        case "${_W_DAY}" in
+            M|Mo|Mon) _CRON_DOW=1 ;;
+            Tu|Tue)   _CRON_DOW=2 ;;
+            W|We|Wed) _CRON_DOW=3 ;;
+            Th|Thu)   _CRON_DOW=4 ;;
+            F|Fr|Fri) _CRON_DOW=5 ;;
+            Sa|Sat)   _CRON_DOW=6 ;;
+            Su|Sun)   _CRON_DOW=0 ;;
+            *)        _CRON_DOW=4 ;;
+        esac
 
-        while kill -0 "${SERVER_PID}" 2>/dev/null; do
-            sleep 30
-            if _wipe_due; then
-                _wipe_run
-                break
-            fi
-        done
-    ) &
-    echo "[startup] Wipe watcher active (sched=${WIPE_SCHED:-forced-only}, day=${_W_DAY}, wipe=${_W_TIME} UTC, warnings start ${_W_TRIGGER} UTC)"
-fi
+        cat >> /tmp/crontab <<EOF
+
+# Soft wipe: ${WIPE_SCHED} on ${_W_DAY} at ${_W_TIME} UTC
+# Warning sequence starts at $(printf '%02d:%02d' ${_TRIGGER_H} ${_TRIGGER_M}) UTC
+${_TRIGGER_M} ${_TRIGGER_H} * * ${_CRON_DOW} /usr/local/bin/wipe-check.sh
+EOF
+
+        echo "[startup] Soft-wipe scheduled: every ${WIPE_SCHED} on ${_W_DAY} at ${_W_TIME} UTC (warnings at $(printf '%02d:%02d' ${_TRIGGER_H} ${_TRIGGER_M}) UTC)"
+        ;;
+    "")
+        echo "[startup] No soft-wipe schedule set (forced-wipe only)"
+        ;;
+    *)
+        echo "[startup] WARNING: WIPE_SCHED=${WIPE_SCHED} not recognized — ignoring (valid: 1w, 2w, 3w, off)" >&2
+        ;;
+esac
+
+# Launch supercronic in background — it manages all scheduled tasks
+supercronic /tmp/crontab &
+SUPERCRONIC_PID=$!
+echo "[startup] supercronic started (PID ${SUPERCRONIC_PID})"
 
 wait "$SERVER_PID"
