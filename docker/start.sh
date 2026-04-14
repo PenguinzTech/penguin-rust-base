@@ -329,6 +329,7 @@ activate_plugin() {
                         # Activate directly from the fresh download (already uncompressed)
                         find "${extract_dir}" -maxdepth 1 -name '*.cs' \
                             -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/" \;
+                        cp "${extract_dir}/${slug}.hash" "${OXIDE_PLUGINS_DIR}/"
 
                         # Update per-plugin and refresh disabled/ (.gz + .hash) for next restart
                         cp -a "${extract_dir}"/* "${PER_PLUGIN_DIR}/${slug}/"
@@ -366,6 +367,7 @@ activate_plugin() {
             else
                 cp --preserve=mode "${PER_PLUGIN_DIR}/${slug}/${cs_name}" "${OXIDE_PLUGINS_DIR}/"
             fi
+            cp "${OXIDE_PLUGINS_DIR}/disabled/${slug}.hash" "${OXIDE_PLUGINS_DIR}/"
             echo "[startup] activated: ${cs_name}"
             ;;
 
