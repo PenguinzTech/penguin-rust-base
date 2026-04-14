@@ -96,9 +96,18 @@ spec:
             - name: RUST_SERVER_EXTRA_ARGS
               value: {{ .Values.server.extraArgs | quote }}
             {{- end }}
+            # ── Ports — shifted to loopback when WAF sidecar is active ─────
+            - name: RUST_SERVER_PORT
+              value: {{ if .Values.waf.enabled }}{{ add 28015 .Values.waf.portOffset | quote }}{{ else }}"28015"{{ end }}
+            - name: RUST_SERVER_IP
+              value: {{ if .Values.waf.enabled }}"127.0.0.1"{{ else }}"0.0.0.0"{{ end }}
+            - name: RUST_QUERY_PORT
+              value: {{ if .Values.waf.enabled }}{{ add 28017 .Values.waf.portOffset | quote }}{{ else }}"28017"{{ end }}
             # ── RCON ─────────────────────────────────────────────────────────
             - name: RUST_RCON_PORT
-              value: {{ .Values.rcon.port | quote }}
+              value: {{ if .Values.waf.enabled }}{{ add (.Values.rcon.port | int) .Values.waf.portOffset | quote }}{{ else }}{{ .Values.rcon.port | quote }}{{ end }}
+            - name: RUST_RCON_IP
+              value: {{ if .Values.waf.enabled }}"127.0.0.1"{{ else }}"0.0.0.0"{{ end }}
             {{- if .Values.rcon.existingSecret }}
             - name: RUST_RCON_PASSWORD
               valueFrom:
@@ -174,6 +183,77 @@ spec:
             - name: server-data
               mountPath: /steamcmd/rust/server
           {{- end }}
+        {{- if .Values.waf.enabled }}
+        - name: rust-waf
+          image: "{{ .Values.waf.image.repository }}:{{ .Values.waf.image.tag }}"
+          imagePullPolicy: {{ .Values.waf.image.pullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: game-udp
+              containerPort: {{ .Values.service.gamePort }}
+              protocol: UDP
+            - name: rcon-tcp
+              containerPort: {{ .Values.rcon.port | int }}
+              protocol: TCP
+            - name: query-udp
+              containerPort: 28017
+              protocol: UDP
+            - name: waf-api
+              containerPort: 8080
+              protocol: TCP
+            - name: waf-metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: WAF_LISTEN_GAME_PORT
+              value: {{ .Values.service.gamePort | quote }}
+            - name: WAF_UPSTREAM_GAME_PORT
+              value: {{ add .Values.service.gamePort .Values.waf.portOffset | quote }}
+            - name: WAF_LISTEN_RCON_PORT
+              value: {{ .Values.rcon.port | quote }}
+            - name: WAF_UPSTREAM_RCON_PORT
+              value: {{ add (.Values.rcon.port | int) .Values.waf.portOffset | quote }}
+            - name: WAF_LISTEN_QUERY_PORT
+              value: "28017"
+            - name: WAF_UPSTREAM_QUERY_PORT
+              value: {{ add 28017 .Values.waf.portOffset | quote }}
+            - name: WAF_RATE_LIMIT_PPS
+              value: {{ .Values.waf.rateLimitPPS | quote }}
+            - name: WAF_FLOOD_THRESHOLD_CPS
+              value: {{ .Values.waf.floodThresholdCPS | quote }}
+            - name: WAF_RCON_BAN_AFTER
+              value: {{ .Values.waf.rconBanAfterFailures | quote }}
+            - name: WAF_AIMBOT_CV
+              value: {{ .Values.waf.aimbotTimingCV | quote }}
+            - name: WAF_PRIORITY_STEAM_IDS
+              value: {{ .Values.waf.prioritySteamIds | default .Values.server.adminSteamIds | quote }}
+            - name: WAF_USERS_CFG_PATH
+              value: {{ printf "/steamcmd/rust/server/%s/cfg/users.cfg" .Values.server.identity | quote }}
+            - name: WAF_BANS_CFG_PATH
+              value: {{ printf "/steamcmd/rust/server/%s/cfg/bans.cfg" .Values.server.identity | quote }}
+            - name: WAF_CFG_POLL_INTERVAL
+              value: {{ .Values.waf.cfgPollInterval | quote }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: server-data
+              mountPath: /steamcmd/rust/server
+              readOnly: true
+          {{- end }}
+          resources:
+            {{- toYaml .Values.waf.resources | nindent 12 }}
+        {{- end }}
       {{- if .Values.persistence.enabled }}
       volumes:
         - name: server-data

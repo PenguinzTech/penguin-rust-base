@@ -27,6 +27,9 @@ server:
   fps: ""
   adminSteamIds: ""
   extraArgs: ""
+  # Identity used as the save directory name under /steamcmd/rust/server/.
+  # Users.cfg and bans.cfg live at <persistence.mountPath>/<identity>/cfg/.
+  identity: "rust_server"
 
 # RCON
 rcon:
@@ -103,3 +106,34 @@ affinity: {}
 extraEnv: []
 # - name: MY_VAR
 #   value: "my-value"
+
+# WAF sidecar — Go proxy that intercepts game traffic before it reaches Rust.
+# Set enabled: true to activate; Rust is shifted to loopback+portOffset so the WAF
+# takes the external-facing ports.
+waf:
+  enabled: false
+  image:
+    repository: ghcr.io/penguinztech/penguin-rust-waf
+    tag: latest
+    pullPolicy: Always
+  # Port offset applied to Rust when WAF is active (Rust binds 127.0.0.1:port+offset).
+  portOffset: 100
+  # Per-IP packet rate limit (packets/sec). Excess packets are dropped.
+  rateLimitPPS: 150
+  # New connections per second per /24 subnet before flood detection triggers.
+  floodThresholdCPS: 10
+  # RCON WebSocket auth failures per IP before the IP is blocked.
+  rconBanAfterFailures: 5
+  # Aimbot timing detection: flag if inter-packet CV < this value. 0 = disabled.
+  aimbotTimingCV: 0.05
+  # Priority SteamIDs that bypass all WAF rules. Falls back to server.adminSteamIds.
+  prioritySteamIds: ""
+  # How often to poll users.cfg and bans.cfg for changes.
+  cfgPollInterval: "5m"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "64Mi"
+    limits:
+      cpu: "250m"
+      memory: "128Mi"

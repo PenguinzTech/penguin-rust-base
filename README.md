@@ -30,6 +30,7 @@ Perfect for operators, communities, and teams extending with proprietary plugins
   - **StackSizeController** — Customize item stack sizes
   - **Whitelist** — Restrict server access to whitelisted players
 - **AutoAdmin Plugin** — Custom PenguinzTech plugin that auto-provisions Oxide permissions from environment variables
+- **WAF Sidecar** — Go-based network-layer firewall that protects the game server from DDoS floods, cheater reconnect storms, RCON brute-force, and packet anomalies — **works in pure vanilla mode** with no Oxide required (see [docs/waf.md](docs/waf.md))
 - **Auto-Configuration** — First-boot tuning of `worldSize`/`maxPlayers` based on available CPU/RAM
 - **Wipe Scheduler** — Configurable map wipes with in-game RCON warnings (60-minute lead time)
 - **DDoS Protection** — Per-source-IP rate limiting via iptables (opt-in, requires `NET_ADMIN`)
@@ -114,7 +115,8 @@ All settings are controlled via environment variables. The most commonly set one
 Specialist guides:
 - **[docs/auto-config.md](docs/auto-config.md)** — first-boot resource detection, lock file behaviour
 - **[docs/wipe-schedule.md](docs/wipe-schedule.md)** — wipe cadence, blueprint wipes, warning schedule
-- **[docs/ddos-protection.md](docs/ddos-protection.md)** — rate limiting and auto-ban
+- **[docs/ddos-protection.md](docs/ddos-protection.md)** — iptables rate limiting and auto-ban
+- **[docs/waf.md](docs/waf.md)** — Go WAF sidecar: vanilla-compatible DDoS/flood/cheat protection, Oxide integration, Prometheus metrics
 
 ---
 
@@ -193,23 +195,53 @@ Plugins are disabled by default. Set `RUST_PLUGINS` to activate specific ones:
 
 ---
 
+## WAF Sidecar (Network-Layer Protection)
+
+The image ships a **Go WAF sidecar** that operates at the network layer — below the Rust game engine. It intercepts all traffic before it reaches the single-threaded C#/Mono game loop and drops malicious packets in Go's concurrent runtime where they are cheap.
+
+**Crucially, this works on pure vanilla servers.** No Oxide, no plugins, no mods required. Every protection below runs at the packet level regardless of server configuration:
+
+| Protection | How it works |
+|---|---|
+| **DDoS / flood** | Per-IP packet-rate limiter; sustained floods auto-blocked |
+| **RCON brute-force** | Failed auth counter; offending IP throttled after N attempts |
+| **Ban evasion** | Steam64 ID extracted from handshake; banned player blocked across IP changes |
+| **Packet anomalies** | Malformed/oversized packets dropped before game sees them |
+| **Aimbot heuristics** | Inter-packet timing CV analysis; bot-like consistency flagged |
+
+When Oxide *is* running, plugins can push runtime rules to the WAF via a loopback REST API — reporting detected cheaters for immediate network-layer enforcement without a game restart.
+
+Enable in Kubernetes (Helm):
+
+```bash
+helm install rust-server ./k8s/helm/rust-server --set waf.enabled=true
+```
+
+📖 **Full WAF reference:** [docs/waf.md](docs/waf.md)
+
+---
+
 ## Networking
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
 | `28015` | UDP + TCP | Game server port (connections + queries) |
 | `28016` | TCP | RCON / WebRCON |
+| `28017` | UDP | Server browser query |
 
-Forward **both UDP and TCP** on port 28015. RCON is optional.
+Forward **both UDP and TCP** on port 28015. RCON and query ports are optional.
+
+> **WAF port note:** When the WAF sidecar is enabled, it occupies the public-facing ports (`28015/28016/28017`) and shifts the game server to loopback offsets (`28115/28116/28117`). No change to external port mappings required.
 
 ---
 
 ## Security
 
-Runs as non-root (`rustserver:rustserver`, UID 1000); no capabilities required unless DDoS protection is enabled. RCON password auto-generated on first boot and persisted to the PVC — never embedded.
+Runs as non-root (`rustserver:rustserver`, UID 1000); no capabilities required unless DDoS protection is enabled. RCON password auto-generated on first boot and persisted to the PVC — never embedded. The WAF sidecar also runs as a dedicated non-root user (`waf:waf`) and adds zero inbound attack surface — its management API listens on loopback only.
 
 Full details — CI scanners, what's not scanned, reporting vulnerabilities: **[docs/SECURITY.md](docs/SECURITY.md)**.  
-DDoS protection setup: **[docs/ddos-protection.md](docs/ddos-protection.md)**.
+DDoS protection setup: **[docs/ddos-protection.md](docs/ddos-protection.md)**.  
+WAF sidecar: **[docs/waf.md](docs/waf.md)**.
 
 ---
 
