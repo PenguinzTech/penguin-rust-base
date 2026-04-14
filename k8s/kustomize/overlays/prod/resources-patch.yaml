@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rust-server
+spec:
+  template:
+    spec:
+      containers:
+        - name: rust-server
+          resources:
+            requests:
+              cpu: "4"
+              memory: "12Gi"
+            limits:
+              cpu: "8"
+              memory: "20Gi"

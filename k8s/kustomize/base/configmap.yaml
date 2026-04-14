@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rust-server-config
+data:
+  RUST_SERVER_NAME: "Rust Server"
+  RUST_SERVER_DESCRIPTION: ""
+  RUST_SERVER_TAGS: ""
+  RUST_SERVER_URL: ""
+  RUST_SERVER_SEED: "12345"
+  RUST_SERVER_WORLDSIZE: ""
+  RUST_SERVER_MAXPLAYERS: ""
+  RUST_SERVER_LEVEL: "Procedural Map"
+  RUST_RCON_PORT: "28016"
+  OXIDE: "1"
+  PVP_MODE: "1"
+  RUST_PLUGINS: ""
+  PLUGIN_SOURCE: "github"
+  PLUGIN_UMOD_FALLBACK: "1"
+  WIPE_SCHED: ""
+  WIPE_DAY: "Th"
+  WIPE_TIME: "06:00"
+  WIPE_BP: "false"
+  DDOS_PROTECT: "0"
+  MONO_MAX_HEAP: "16g"

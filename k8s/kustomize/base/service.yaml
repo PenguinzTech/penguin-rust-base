@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rust-server
+spec:
+  selector:
+    app: rust-server
+  ports:
+    - name: game-udp
+      port: 28015
+      targetPort: game-udp
+      protocol: UDP
+    - name: game-tcp
+      port: 28015
+      targetPort: game-tcp
+      protocol: TCP
+    - name: rcon
+      port: 28016
+      targetPort: rcon
+      protocol: TCP

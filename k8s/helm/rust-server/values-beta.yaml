@@ -1,0 +1,20 @@
+# Beta overrides — dal2.penguintech.cloud
+image:
+  repository: ghcr.io/penguinztechinc/penguin-rust-base
+  # tag: set via --set image.tag=<epoch> or CI pipeline
+  tag: "latest"
+  pullPolicy: Always
+
+server:
+  name: "Rust Beta Server"
+
+resources:
+  requests:
+    cpu: "2"
+    memory: "8Gi"
+  limits:
+    cpu: "4"
+    memory: "16Gi"
+
+service:
+  type: LoadBalancer

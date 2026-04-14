@@ -1,0 +1,26 @@
+# Production overrides
+# image.tag should be set to a specific epoch (e.g. --set image.tag=1747123456)
+# For hard-pinned deployments use the SHA256 digest:
+#   image.repository: ghcr.io/penguinztechinc/penguin-rust-base@sha256:<digest>
+#   image.tag: ""
+image:
+  repository: ghcr.io/penguinztechinc/penguin-rust-base
+  tag: "latest"   # override with immutable epoch tag or SHA digest
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: "4"
+    memory: "12Gi"
+  limits:
+    cpu: "8"
+    memory: "20Gi"
+
+perf:
+  monoMaxHeap: "16g"
+
+persistence:
+  size: "50Gi"
+
+service:
+  type: LoadBalancer
