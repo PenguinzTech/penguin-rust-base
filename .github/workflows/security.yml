@@ -44,10 +44,10 @@ jobs:
 
       - name: Lint shell scripts
         run: |
-          shellcheck docker/start.sh
-          shellcheck docker/lib-functions.sh
-          shellcheck docker/check-plugin-updates.sh
-          shellcheck docker/wipe-check.sh
+          shellcheck -x --source-path=docker docker/start.sh
+          shellcheck -x docker/lib-functions.sh
+          shellcheck -x --source-path=docker docker/check-plugin-updates.sh
+          shellcheck -x --source-path=docker docker/wipe-check.sh
 
   # Scan repo for hardcoded secrets, API keys, credentials
   # Scans all files except .cs plugins (third-party, not our code)

@@ -297,56 +297,6 @@ oxide.grant user 76561198000000000 whitelist.allow
 Admins (from `RUST_ADMIN_STEAMIDS`) bypass the whitelist by default via the
 `Admin Excluded = true` setting in `oxide/data/Whitelist.json`.
 
-### SafeSpace plugin (kid-friendly mode)
-
-The **SafeSpace** plugin enforces team-only communication by default. All channels
-that reach beyond a player's team are blocked unless the player has a specific permission.
-
-| Feature | Blocked by default | Bypass permission |
-|---------|-------------------|-------------------|
-| Sign / photo frame painting | Yes | `safespace.signs` |
-| Global chat | Yes (team chat always works) | `safespace.globalchat` |
-| Voice chat | Yes | `safespace.voice` |
-| Note writing | Yes | `safespace.notes` |
-
-**Admins** (from `RUST_ADMIN_STEAMIDS`) are automatically granted all SafeSpace
-permissions via AutoAdmin — they can use all features without extra configuration.
-
-**Grant features to trusted players via RCON:**
-```bash
-# Allow a player to use global chat
-oxide.grant user 76561198000000000 safespace.globalchat
-
-# Allow a group to paint signs
-oxide.grant group trusted safespace.signs
-
-# Allow all features for a player
-oxide.grant user 76561198000000000 safespace.signs
-oxide.grant user 76561198000000000 safespace.globalchat
-oxide.grant user 76561198000000000 safespace.voice
-oxide.grant user 76561198000000000 safespace.notes
-```
-
-**Disable individual restrictions** (allow for everyone without permissions):
-
-Edit `oxide/config/SafeSpace.json`:
-```json
-{
-  "BlockSigns": true,
-  "BlockGlobalChat": false,
-  "BlockVoice": true,
-  "BlockNotes": true
-}
-```
-
-**Disable the plugin entirely:**
-```bash
--e OXIDE_DISABLED_PLUGINS="SafeSpace"
-```
-
-**Player status command:** Players can type `/safespace` in chat to see which
-features they have access to.
-
 ---
 
 ## Oxide Data Persistence

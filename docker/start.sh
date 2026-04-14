@@ -248,59 +248,157 @@ case "${PLUGIN_SOURCE}" in
         ;;
 esac
 
-# Build the slug list. If RUST_PLUGINS is empty, use every baked plugin.
-if [ -n "${RUST_PLUGINS}" ]; then
-    SLUGS=$(echo "${RUST_PLUGINS}" | tr ',' ' ' | tr -s ' ')
-    echo "[startup] RUST_PLUGINS explicit list: ${SLUGS}"
-else
-    SLUGS=""
-    for dir in "${PER_PLUGIN_DIR}"/*/; do
-        [ -d "${dir}" ] || continue
-        SLUGS="${SLUGS} $(basename "${dir}")"
-    done
-    echo "[startup] RUST_PLUGINS unset — using all baked plugins: ${SLUGS}"
-fi
-
 # fetch_from_umod, stage_from_baked, send_rcon — defined in lib-functions.sh
 
-if [ "${OXIDE:-1}" != "0" ]; then
-    BAKED_COUNT=0
-    FALLBACK_COUNT=0
-    FALLBACK_SLUGS=""
-    for slug in ${SLUGS}; do
-        [ -z "${slug}" ] && continue
-        case "${PLUGIN_SOURCE}" in
-            github)
-                if [ -d "${PER_PLUGIN_DIR}/${slug}" ]; then
-                    stage_from_baked "${slug}"
-                    rc=$?
-                    [ "${rc}" = "2" ] && exit 1
-                    BAKED_COUNT=$((BAKED_COUNT + 1))
-                else
-                    echo "[startup] WARNING: ${slug} not in scanned repo — falling back to umod.org (BYPASSES SCAN PIPELINE)" >&2
-                    if fetch_from_umod "${slug}"; then
-                        FALLBACK_COUNT=$((FALLBACK_COUNT + 1))
-                        FALLBACK_SLUGS="${FALLBACK_SLUGS} ${slug}"
+PLUGINS_REPO="PenguinzTech/penguin-rust-plugins"
+GITHUB_API="https://api.github.com/repos/${PLUGINS_REPO}"
+
+# Activate a single baked plugin slug:
+#   - In github mode: compare baked hash against latest upstream; download update if
+#     hashes differ, then move the .cs from disabled/ → oxide/plugins/.
+#   - In umod mode: always pull fresh from umod.org directly into oxide/plugins/.
+#
+# Returns 0 on success, 1 on non-fatal failure (plugin skipped), exits on fatal.
+activate_plugin() {
+    local slug="$1"
+
+    case "${PLUGIN_SOURCE}" in
+        github)
+            local src_dir="${PER_PLUGIN_DIR}/${slug}"
+            if [ ! -d "${src_dir}" ]; then
+                echo "[startup] WARNING: ${slug} not in baked plugins — skipping" >&2
+                return 1
+            fi
+
+            local local_sha
+            local_sha=$(awk '{print $1}' "${src_dir}/${slug}.hash")
+
+            # Fetch upstream hash for the latest release of this slug.
+            local latest_tag
+            latest_tag=$(echo "${_ALL_TAGS}" \
+                | awk -v s="${slug}-" 'index($0,s)==1' \
+                | awk -F- '{print $NF"\t"$0}' | sort -n | tail -1 | cut -f2 || true)
+
+            if [ -n "${latest_tag}" ]; then
+                local upstream_sha
+                upstream_sha=$(curl -sfL \
+                    "https://github.com/${PLUGINS_REPO}/releases/download/${latest_tag}/${slug}.hash" \
+                    | awk '{print $1}' 2>/dev/null || true)
+
+                if [ -n "${upstream_sha}" ] && [ "${upstream_sha}" != "${local_sha}" ]; then
+                    echo "[startup] ${slug}: update available (${local_sha:0:12}.. -> ${upstream_sha:0:12}..)"
+                    local tarball_name
+                    tarball_name=$(curl -sf "${GITHUB_API}/releases/tags/${latest_tag}" \
+                        | jq -r '.assets[].name' 2>/dev/null \
+                        | grep "^${slug}-.*\.tar\.gz$" | grep -v '\.sha256$' | head -1 || true)
+
+                    if [ -n "${tarball_name}" ]; then
+                        local workdir extract_dir
+                        workdir="$(mktemp -d)"
+                        extract_dir="$(mktemp -d)"
+
+                        if curl -sfL \
+                            "https://github.com/${PLUGINS_REPO}/releases/download/${latest_tag}/${tarball_name}" \
+                            -o "${workdir}/${tarball_name}"; then
+
+                            local sidecar_sha actual_sha
+                            sidecar_sha=$(curl -sfL \
+                                "https://github.com/${PLUGINS_REPO}/releases/download/${latest_tag}/${tarball_name}.sha256" \
+                                | awk '{print $1}' || true)
+                            actual_sha=$(sha256sum "${workdir}/${tarball_name}" | awk '{print $1}')
+
+                            if [ -n "${sidecar_sha}" ] && [ "${sidecar_sha}" != "${actual_sha}" ]; then
+                                echo "[startup] FATAL: tarball sha256 mismatch for ${slug} — refusing to update" >&2
+                                rm -rf "${workdir}" "${extract_dir}"
+                                exit 1
+                            fi
+
+                            tar -xzf "${workdir}/${tarball_name}" -C "${extract_dir}"
+                            if ! (cd "${extract_dir}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
+                                echo "[startup] FATAL: ${slug} plugin hash mismatch post-extract — refusing to update" >&2
+                                rm -rf "${workdir}" "${extract_dir}"
+                                exit 1
+                            fi
+
+                            cp -a "${extract_dir}"/* "${src_dir}/"
+                            find "${extract_dir}" -maxdepth 1 -name '*.cs' \
+                                -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/disabled/" \;
+                            echo "[startup] ${slug}: updated"
+                        else
+                            echo "[startup] WARNING: failed to download ${slug} update — activating baked version" >&2
+                        fi
+                        rm -rf "${workdir}" "${extract_dir}"
+                    else
+                        echo "[startup] WARNING: no tarball asset for ${slug} ${latest_tag} — activating baked version" >&2
                     fi
                 fi
-                ;;
-            umod)
-                echo "[startup] WARNING: PLUGIN_SOURCE=umod — fetching ${slug} from umod.org (BYPASSES SCAN PIPELINE)" >&2
-                if fetch_from_umod "${slug}"; then
-                    FALLBACK_COUNT=$((FALLBACK_COUNT + 1))
-                    FALLBACK_SLUGS="${FALLBACK_SLUGS} ${slug}"
-                fi
-                ;;
-        esac
-    done
+            fi
 
-    # Summary line — greppable for ops dashboards and log aggregation.
-    # FALLBACK_COUNT > 0 means at least one plugin bypassed the scan pipeline.
-    FALLBACK_SLUGS="${FALLBACK_SLUGS# }"
-    if [ "${FALLBACK_COUNT}" -gt 0 ]; then
-        echo "[startup] Plugin provisioning complete: ${BAKED_COUNT} baked/verified, ${FALLBACK_COUNT} umod-fallback (UNSCANNED: ${FALLBACK_SLUGS})" >&2
+            # Activate: move .cs from disabled/ → oxide/plugins/
+            local cs_name
+            cs_name=$(find "${src_dir}" -maxdepth 1 -name '*.cs' -exec basename {} \; 2>/dev/null | head -1 || true)
+            if [ -z "${cs_name}" ]; then
+                echo "[startup] WARNING: no .cs found for ${slug} — skipping" >&2
+                return 1
+            fi
+            # Hash-verify before activating (guards against tampered disabled/ files)
+            if ! (cd "${src_dir}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
+                echo "[startup] FATAL: ${slug} hash mismatch — refusing to activate" >&2
+                exit 1
+            fi
+            # If the .cs was updated above, disabled/ was refreshed; otherwise it's the baked copy.
+            if [ -f "${OXIDE_PLUGINS_DIR}/disabled/${cs_name}" ]; then
+                mv "${OXIDE_PLUGINS_DIR}/disabled/${cs_name}" "${OXIDE_PLUGINS_DIR}/"
+            else
+                # Fallback: copy from per-plugin (e.g. disabled/ was already cleared)
+                cp --preserve=mode "${src_dir}/${cs_name}" "${OXIDE_PLUGINS_DIR}/"
+            fi
+            echo "[startup] activated: ${cs_name}"
+            ;;
+
+        umod)
+            echo "[startup] WARNING: PLUGIN_SOURCE=umod — fetching ${slug} from umod.org (BYPASSES SCAN PIPELINE)" >&2
+            fetch_from_umod "${slug}"
+            return $?
+            ;;
+    esac
+}
+
+# Plugins are baked into oxide/plugins/disabled/ at image build time (all disabled
+# by default). RUST_PLUGINS selects which to activate. Empty = all stay disabled.
+if [ "${OXIDE:-1}" != "0" ]; then
+    mkdir -p "${OXIDE_PLUGINS_DIR}/disabled"
+    ACTIVATED_COUNT=0
+    UMOD_COUNT=0
+
+    if [ -z "${RUST_PLUGINS:-}" ]; then
+        echo "[startup] RUST_PLUGINS unset — all plugins remain disabled"
     else
-        echo "[startup] Plugin provisioning complete: ${BAKED_COUNT} baked/verified, 0 umod-fallback"
+        SLUGS=$(echo "${RUST_PLUGINS}" | tr ',' ' ' | tr -s ' ')
+        echo "[startup] RUST_PLUGINS: ${SLUGS}"
+
+        # Fetch all release tags once for github mode update checks.
+        _ALL_TAGS=""
+        if [ "${PLUGIN_SOURCE}" = "github" ]; then
+            _ALL_TAGS=$(curl -sf "${GITHUB_API}/releases?per_page=100" \
+                | jq -r '.[].tag_name' 2>/dev/null || true)
+        fi
+
+        for slug in ${SLUGS}; do
+            [ -z "${slug}" ] && continue
+            if activate_plugin "${slug}"; then
+                case "${PLUGIN_SOURCE}" in
+                    github) ACTIVATED_COUNT=$((ACTIVATED_COUNT + 1)) ;;
+                    umod)   UMOD_COUNT=$((UMOD_COUNT + 1)) ;;
+                esac
+            fi
+        done
+
+        if [ "${UMOD_COUNT}" -gt 0 ]; then
+            echo "[startup] Plugin provisioning complete: ${ACTIVATED_COUNT} activated, ${UMOD_COUNT} umod (UNSCANNED)" >&2
+        else
+            echo "[startup] Plugin provisioning complete: ${ACTIVATED_COUNT} activated"
+        fi
     fi
 fi
 

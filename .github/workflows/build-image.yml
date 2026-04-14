@@ -158,12 +158,20 @@ jobs:
           mkdir -p docker/staged-plugins
           : > docker/plugin-refs.txt.last-good.new
           FALLBACK_USED=0
-          # Fetch release tag list once — avoids N API calls for N plugins.
+
+          # Fetch all release tags and derive unique slug list automatically.
+          # Tags follow "${slug}-${epoch}" — strip the trailing -digits suffix.
+          # No static plugin list needed; any plugin published to the plugins repo
+          # is automatically included on the next image build.
           all_tags=$(gh release list --repo "${PLUGINS_REPO}" --limit 500 \
                       --json tagName -q '.[].tagName')
+          if [ -z "${all_tags}" ]; then
+            echo "FATAL: no releases found in ${PLUGINS_REPO}" >&2
+            exit 1
+          fi
+          slugs=$(echo "${all_tags}" | sed 's/-[0-9][0-9]*$//' | sort -u)
 
-          while IFS='|' read -r slug filename; do
-            case "${slug}" in '#'*|'') continue ;; esac
+          for slug in ${slugs}; do
             target="docker/staged-plugins/${slug}"
             rm -rf "${target}" && mkdir -p "${target}"
             workdir="$(mktemp -d)"
@@ -179,26 +187,23 @@ jobs:
                   --pattern "${slug}-*.tar.gz" --pattern "${slug}-*.tar.gz.sha256" \
                   --dir "${workdir}"; then
               tarball=$(ls "${workdir}/${slug}-"*.tar.gz)
-              # Integrity: sha256 sidecar published by the plugin workflow. We compare
-              # hash fields only (first column) — the path column in the sidecar is
-              # publisher-controlled metadata and not a trust anchor. This also tolerates
-              # sidecars with absolute-path references (older releases, pre-fix).
+              # Integrity: compare sha256 sidecar hash field only (first column).
+              # The path column is publisher metadata and not a trust anchor.
               expected_sha=$(awk '{print $1}' "${tarball}.sha256")
               actual_sha=$(sha256sum "${tarball}" | awk '{print $1}')
               if [ "${expected_sha}" != "${actual_sha}" ]; then
                 echo "FATAL: sha256 mismatch for ${slug}: expected=${expected_sha} actual=${actual_sha}" >&2
                 exit 1
               fi
-              # Plugin directory layout: tarball root is the staged dir itself.
               tar -xzf "${tarball}" -C "${target}"
               tarball_sha="${actual_sha}"
-              echo "${slug}|${filename}|${latest_tag}|sha256:${tarball_sha}" \
+              echo "${slug}|${latest_tag}|sha256:${tarball_sha}" \
                 >> docker/plugin-refs.txt.last-good.new
               echo "staged ${slug} from ${latest_tag} (sha256:${tarball_sha})"
             else
               echo "WARNING: release fetch failed for ${slug} — trying last-good fallback" >&2
               if [ -f docker/plugin-refs.txt.last-good ]; then
-                fallback_tag=$(awk -F'|' -v s="${slug}" '$1==s {print $3}' \
+                fallback_tag=$(awk -F'|' -v s="${slug}" '$1==s {print $2}' \
                                 docker/plugin-refs.txt.last-good)
                 if [ -n "${fallback_tag}" ] \
                    && gh release download "${fallback_tag}" --repo "${PLUGINS_REPO}" \
@@ -225,12 +230,12 @@ jobs:
                 exit 1
               fi
             fi
-            # Post-extract verification: ${slug}.hash is committed in the plugins repo
-            # and bundled in the tarball. A second, independent integrity check on the
-            # actual .cs file contents — the Dockerfile does this same check at build time.
+            # Post-extract verification: ${slug}.hash bundled in the tarball.
+            # Independent integrity check on actual .cs contents —
+            # the Dockerfile repeats this at build time.
             (cd "${target}" && sha256sum -c "${slug}.hash")
             rm -rf "${workdir}"
-          done < docker/plugin-refs.txt
+          done
           mv docker/plugin-refs.txt.last-good.new docker/plugin-refs.txt.last-good
           echo "stale=${FALLBACK_USED}" >> "$GITHUB_OUTPUT"
 

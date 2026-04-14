@@ -202,7 +202,9 @@ RUN set -eu; \
       (cd "${slug}" && sha256sum -c "${slug}.hash") \
         || { echo "FATAL: ${slug} hash mismatch — refusing to build" >&2; exit 1; }; \
     done; \
-    mkdir -p /steamcmd/rust/oxide/plugins
+    mkdir -p /steamcmd/rust/oxide/plugins/disabled; \
+    find /etc/penguin-rust-plugins/per-plugin -maxdepth 2 -name '*.cs' \
+        -exec cp --preserve=mode {} /steamcmd/rust/oxide/plugins/disabled/ \;
 
 # ─── Built-in plugins ────────────────────────────────────────────────────────
 # AutoAdmin is baked into the base image so every downstream image gets
