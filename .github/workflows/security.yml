@@ -43,7 +43,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
       - name: Lint shell scripts
-        run: shellcheck docker/start.sh
+        run: |
+          shellcheck docker/start.sh
+          shellcheck docker/lib-functions.sh
+          shellcheck docker/check-plugin-updates.sh
+          shellcheck docker/wipe-check.sh
 
   # Scan repo for hardcoded secrets, API keys, credentials
   # Scans all files except .cs plugins (third-party, not our code)

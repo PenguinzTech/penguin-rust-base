@@ -11,6 +11,10 @@
 # =============================================================================
 set -euo pipefail
 
+# ─── Shared functions ────────────────────────────────────────────────────────
+# shellcheck source=lib-functions.sh
+. /usr/local/lib/penguin-rust/lib-functions.sh
+
 # ─── File descriptor limits ──────────────────────────────────────────────────
 # Default system limit causes "too many open files" during entity initialization.
 # Rust opens file handles for every entity, navmesh tile, and Oxide plugin.
@@ -257,54 +261,7 @@ else
     echo "[startup] RUST_PLUGINS unset — using all baked plugins: ${SLUGS}"
 fi
 
-fetch_from_umod() {
-    slug="$1"
-    filename=$(curl -fsSL "https://umod.org/plugins/${slug}.json" \
-                | jq -r '.title // empty' \
-                | tr -d ' ' \
-                || true)
-    [ -z "${filename}" ] && filename="${slug}"
-
-    # Try .cs first (90%+ of umod plugins)
-    target="${OXIDE_PLUGINS_DIR}/${filename}.cs"
-    if curl -fsSL "https://umod.org/plugins/${slug}.cs" -o "${target}" 2>/dev/null; then
-        echo "[startup] fetched umod:${slug} -> ${filename}.cs"
-        return 0
-    fi
-
-    # Fallback: some plugins are distributed as .zip (extract .cs from inside)
-    zip_tmp="$(mktemp -d)"
-    if curl -fsSL "https://umod.org/plugins/${slug}.zip" -o "${zip_tmp}/${slug}.zip" 2>/dev/null; then
-        if unzip -qo "${zip_tmp}/${slug}.zip" -d "${zip_tmp}/extracted" 2>/dev/null; then
-            cs_count=$(find "${zip_tmp}/extracted" -name '*.cs' | wc -l)
-            if [ "${cs_count}" -gt 0 ]; then
-                find "${zip_tmp}/extracted" -name '*.cs' \
-                    -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/" \;
-                echo "[startup] fetched umod:${slug} -> extracted ${cs_count} .cs from .zip"
-                rm -rf "${zip_tmp}"
-                return 0
-            fi
-        fi
-    fi
-    rm -rf "${zip_tmp}"
-
-    echo "[startup] WARNING: failed to fetch umod:${slug} (.cs and .zip both failed)" >&2
-    return 1
-}
-
-stage_from_baked() {
-    slug="$1"
-    src_dir="${PER_PLUGIN_DIR}/${slug}"
-    [ -d "${src_dir}" ] || return 1
-    if ! (cd "${src_dir}" && sha256sum -c "${slug}.hash" >/dev/null 2>&1); then
-        echo "[startup] FATAL: ${slug} baked hash mismatch — refusing to stage" >&2
-        return 2
-    fi
-    find "${src_dir}" -maxdepth 1 -name '*.cs' \
-        -exec cp --preserve=mode {} "${OXIDE_PLUGINS_DIR}/" \;
-    echo "[startup] staged baked:${slug} (hash verified)"
-    return 0
-}
+# fetch_from_umod, stage_from_baked, send_rcon — defined in lib-functions.sh
 
 if [ "${OXIDE:-1}" != "0" ]; then
     BAKED_COUNT=0
@@ -414,19 +371,7 @@ fi
 # sanitisation. Passing an empty string throws ArgumentException — always set
 # by this point (either explicit env var or generated above).
 
-# ─── RCON helper ─────────────────────────────────────────────────────────────
-# Sends a single command to the server via WebSocket RCON (rcon.web 1).
-# Requires websocat (installed in image) and RUST_RCON_PASSWORD to be set.
-# Silently no-ops if either is missing — never blocks server startup.
-send_rcon() {
-    local cmd="$1"
-    [ -z "${RUST_RCON_PASSWORD:-}" ] && return 0
-    command -v websocat >/dev/null 2>&1 || return 0
-    printf '{"Identifier":1,"Message":"%s","Name":"start.sh"}\n' "${cmd}" | \
-        websocat -n1 --no-close --timeout 5 \
-        "ws://127.0.0.1:${RUST_RCON_PORT:-28016}/${RUST_RCON_PASSWORD}" \
-        >/dev/null 2>&1 || true
-}
+# send_rcon — defined in lib-functions.sh
 
 # ─── SIGTERM handler ─────────────────────────────────────────────────────────
 # K8s sends SIGTERM before SIGKILL. Rust needs time to flush world state.
@@ -569,37 +514,21 @@ case "${WIPE_SCHED:-}" in
     1w|2w|3w)
         _W_DAY="${WIPE_DAY:-Th}"
         _W_TIME="${WIPE_TIME:-06:00}"
-        _W_HOUR="${_W_TIME%%:*}"
-        _W_MIN="${_W_TIME##*:}"
 
-        # Trigger time = WIPE_TIME - 60 min (warning sequence start)
-        _TRIGGER_TOTAL=$(( (10#${_W_HOUR} * 60 + 10#${_W_MIN}) - 60 ))
-        if [ "${_TRIGGER_TOTAL}" -lt 0 ]; then
-            _TRIGGER_TOTAL=$(( _TRIGGER_TOTAL + 1440 ))
-        fi
-        _TRIGGER_H=$(( _TRIGGER_TOTAL / 60 ))
-        _TRIGGER_M=$(( _TRIGGER_TOTAL % 60 ))
-
-        # Map day abbreviation to cron DOW (0=Sun, 1=Mon, ..., 6=Sat)
-        case "${_W_DAY}" in
-            M|Mo|Mon) _CRON_DOW=1 ;;
-            Tu|Tue)   _CRON_DOW=2 ;;
-            W|We|Wed) _CRON_DOW=3 ;;
-            Th|Thu)   _CRON_DOW=4 ;;
-            F|Fr|Fri) _CRON_DOW=5 ;;
-            Sa|Sat)   _CRON_DOW=6 ;;
-            Su|Sun)   _CRON_DOW=0 ;;
-            *)        _CRON_DOW=4 ;;
-        esac
+        # Use shared helpers for trigger time and DOW mapping
+        _TRIGGER_CRON=$(compute_wipe_trigger "${_W_TIME}")
+        _TRIGGER_M="${_TRIGGER_CRON%% *}"
+        _TRIGGER_H="${_TRIGGER_CRON##* }"
+        _CRON_DOW=$(day_to_cron_dow "${_W_DAY}")
 
         cat >> /tmp/crontab <<EOF
 
 # Soft wipe: ${WIPE_SCHED} on ${_W_DAY} at ${_W_TIME} UTC
-# Warning sequence starts at $(printf '%02d:%02d' ${_TRIGGER_H} ${_TRIGGER_M}) UTC
+# Warning sequence starts at $(printf '%02d:%02d' "${_TRIGGER_H}" "${_TRIGGER_M}") UTC
 ${_TRIGGER_M} ${_TRIGGER_H} * * ${_CRON_DOW} /usr/local/bin/wipe-check.sh
 EOF
 
-        echo "[startup] Soft-wipe scheduled: every ${WIPE_SCHED} on ${_W_DAY} at ${_W_TIME} UTC (warnings at $(printf '%02d:%02d' ${_TRIGGER_H} ${_TRIGGER_M}) UTC)"
+        echo "[startup] Soft-wipe scheduled: every ${WIPE_SCHED} on ${_W_DAY} at ${_W_TIME} UTC (warnings at $(printf '%02d:%02d' "${_TRIGGER_H}" "${_TRIGGER_M}") UTC)"
         ;;
     "")
         echo "[startup] No soft-wipe schedule set (forced-wipe only)"

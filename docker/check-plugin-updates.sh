@@ -20,6 +20,9 @@
 # =============================================================================
 set -uo pipefail
 
+# shellcheck source=lib-functions.sh
+. /usr/local/lib/penguin-rust/lib-functions.sh
+
 # ─── Guards ─────────────────────────────────────────────────────────────────
 if [ "${PLUGIN_UPDATE_ENABLED:-1}" = "0" ]; then
     exit 0
@@ -41,23 +44,7 @@ OXIDE_PLUGINS_DIR="/steamcmd/rust/oxide/plugins"
 UPDATED=0
 FAILED=0
 
-# Load RCON password if not in env (may have been generated at startup)
-if [ -z "${RUST_RCON_PASSWORD:-}" ]; then
-    RCON_PW_FILE="/steamcmd/rust/server/${RUST_SERVER_IDENTITY:-rust_server}/.rcon.pw"
-    if [ -f "${RCON_PW_FILE}" ]; then
-        RUST_RCON_PASSWORD=$(cat "${RCON_PW_FILE}")
-    fi
-fi
-
-send_rcon() {
-    local cmd="$1"
-    [ -z "${RUST_RCON_PASSWORD:-}" ] && return 0
-    command -v websocat >/dev/null 2>&1 || return 0
-    printf '{"Identifier":1,"Message":"%s","Name":"check-plugin-updates"}\n' "${cmd}" | \
-        websocat -n1 --no-close --timeout 5 \
-        "ws://127.0.0.1:${RUST_RCON_PORT:-28016}/${RUST_RCON_PASSWORD}" \
-        >/dev/null 2>&1 || true
-}
+load_rcon_password
 
 # Fetch all release tags once (public repo, no auth needed)
 ALL_TAGS=$(curl -sf "${GITHUB_API}/releases?per_page=100" \

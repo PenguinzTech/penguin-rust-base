@@ -1,6 +1,9 @@
 # penguin-rust-base
 
 [![GHCR](https://img.shields.io/badge/ghcr.io-penguin--rust--base-blue)](https://github.com/PenguinzTech/penguin-rust-base/pkgs/container/penguin-rust-base)
+[![Tests](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/test.yml/badge.svg)](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/test.yml)
+[![Security](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/security.yml/badge.svg)](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/security.yml)
+[![Build](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/build-image.yml/badge.svg)](https://github.com/PenguinzTech/penguin-rust-base/actions/workflows/build-image.yml)
 
 A production-ready Docker image for Rust dedicated game servers with Oxide mod framework and 11 pre-installed plugins. Game files (~6GB) are baked at build time to eliminate first-boot download waits. Automatically rebuilds every 4 hours when Oxide or Steam updates, with daily checks for plugin updates.
 
