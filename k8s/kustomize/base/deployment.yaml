@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rust-server
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: rust-server
+  template:
+    metadata:
+      labels:
+        app: rust-server
+    spec:
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: rust-server
+          image: ghcr.io/penguinztech/penguin-rust-base:latest
+          ports:
+            - name: game-udp
+              containerPort: 28015
+              protocol: UDP
+            - name: game-tcp
+              containerPort: 28015
+              protocol: TCP
+            - name: rcon
+              containerPort: 28016
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: rust-server-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            exec:
+              command: ["pgrep", "-f", "RustDedicated"]
+            initialDelaySeconds: 600
+            periodSeconds: 60
+            failureThreshold: 3
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+            limits:
+              cpu: "4"
+              memory: "20Gi"
+          volumeMounts:
+            - name: server-data
+              mountPath: /steamcmd/rust/server
+      volumes:
+        - name: server-data
+          persistentVolumeClaim:
+            claimName: rust-server-data

@@ -1,0 +1,139 @@
+image:
+  repository: ghcr.io/penguinztech/penguin-rust-base
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+  # pullSecrets:
+  #   - name: ghcr-pull-secret
+
+# Namespace — override per environment
+namespace: penguin-rust
+
+# Rust server env vars — all configurable without rebuilding the image
+server:
+  name: "Rust Server"
+  description: ""
+  tags: ""
+  url: ""
+  headerImage: ""
+  logo: ""
+  seed: "12345"
+  worldSize: ""       # blank = auto-detected from CPU/RAM on first boot
+  maxPlayers: ""      # blank = auto-detected
+  level: "Procedural Map"
+  pve: ""
+  radiation: ""
+  tickrate: ""
+  fps: ""
+  adminSteamIds: ""
+  extraArgs: ""
+  # Identity used as the save directory name under /steamcmd/rust/server/.
+  # Users.cfg and bans.cfg live at <persistence.mountPath>/<identity>/cfg/.
+  identity: "rust_server"
+
+# RCON
+rcon:
+  port: "28016"
+  # password — set via secretRef or explicit value; auto-generated + persisted to PVC if blank
+  password: ""
+  existingSecret: ""       # name of k8s secret with key RUST_RCON_PASSWORD
+  secretKey: "RUST_RCON_PASSWORD"
+
+# Oxide / plugin config
+oxide:
+  enabled: "1"
+  pvpMode: "1"
+  plugins: ""              # comma-separated slugs; blank = all disabled
+  pluginSource: "github"   # github | baked | umod
+  pluginUmodFallback: "1"
+  disabledPlugins: ""      # comma-separated plugin names to disable at runtime
+
+# Wipe schedule
+wipe:
+  sched: ""    # blank = first Thursday of month; 1w|2w|3w = weekly; off = never
+  day: "Th"
+  time: "06:00"
+  bp: "false"
+
+# DDoS protection (requires NET_ADMIN capability)
+ddos:
+  enabled: false
+  udpRate: "60"
+  udpBurst: "120"
+
+# Performance tuning
+perf:
+  monoMaxHeap: "16g"
+  cpuCores: ""   # e.g. "0,1" to pin game loop; blank to skip
+
+# Resources — game server needs significantly more than a typical microservice
+resources:
+  requests:
+    cpu: "2"
+    memory: "8Gi"
+  limits:
+    cpu: "4"
+    memory: "20Gi"
+
+# Persistent volume for server saves (world, player data, plugin config)
+persistence:
+  enabled: true
+  storageClass: ""     # blank = cluster default
+  size: "20Gi"
+  accessMode: ReadWriteOnce
+  # existingClaim: ""  # uncomment to use a pre-existing PVC
+
+# Service configuration
+service:
+  type: LoadBalancer
+  # Game port (UDP + TCP) — Rust clients connect here
+  gamePort: 28015
+  # RCON port (TCP only)
+  rconPort: 28016
+  # LoadBalancer source IP whitelist (empty = public)
+  loadBalancerSourceRanges: []
+  # For NodePort (alpha): set these to fix port assignments
+  gameNodePort: null
+  rconNodePort: null
+
+# Pod-level settings
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Extra environment variables injected verbatim
+extraEnv: []
+# - name: MY_VAR
+#   value: "my-value"
+
+# WAF sidecar — Go proxy that intercepts game traffic before it reaches Rust.
+# Set enabled: true to activate; Rust is shifted to loopback+portOffset so the WAF
+# takes the external-facing ports.
+waf:
+  enabled: false
+  image:
+    repository: ghcr.io/penguinztech/penguin-rust-waf
+    tag: latest
+    pullPolicy: Always
+  # Port offset applied to Rust when WAF is active (Rust binds 127.0.0.1:port+offset).
+  portOffset: 100
+  # Per-IP packet rate limit (packets/sec). Excess packets are dropped.
+  rateLimitPPS: 150
+  # New connections per second per /24 subnet before flood detection triggers.
+  floodThresholdCPS: 10
+  # RCON WebSocket auth failures per IP before the IP is blocked.
+  rconBanAfterFailures: 5
+  # Aimbot timing detection: flag if inter-packet CV < this value. 0 = disabled.
+  aimbotTimingCV: 0.05
+  # Priority SteamIDs that bypass all WAF rules. Falls back to server.adminSteamIds.
+  prioritySteamIds: ""
+  # How often to poll users.cfg and bans.cfg for changes.
+  cfgPollInterval: "5m"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "64Mi"
+    limits:
+      cpu: "250m"
+      memory: "128Mi"

@@ -61,6 +61,8 @@ jobs:
 
       - name: Scan for secrets with gitleaks
         uses: gitleaks/gitleaks-action@bf2dc8e55639c1e091e9b45970152e4313705814
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Scan IaC (Dockerfiles, shell scripts) for security violations
   # Uses Checkov to check Docker security practices (CKV_DOCKER_* only)

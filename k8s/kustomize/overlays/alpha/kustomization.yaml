@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: penguin-rust
+
+bases:
+  - ../../base
+
+# Use local MicroK8s registry
+images:
+  - name: ghcr.io/penguinztech/penguin-rust-base
+    newName: localhost:32000/penguin-rust-base
+    newTag: latest
+
+patches:
+  # NodePort service — expose game + RCON directly on localhost
+  - path: service-patch.yaml
+    target:
+      kind: Service
+      name: rust-server
+  # Reduced resources for local testing
+  - path: resources-patch.yaml
+    target:
+      kind: Deployment
+      name: rust-server
+  # Alpha-specific config
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: rust-server-config
+      data:
+        RUST_SERVER_NAME: "Rust Alpha Test Server"
+        RUST_SERVER_SEED: "99999"
+        RUST_SERVER_WORLDSIZE: "1000"
+        MONO_MAX_HEAP: "6g"

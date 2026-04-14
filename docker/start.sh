@@ -114,7 +114,13 @@ if [ "${OXIDE:-1}" != "0" ]; then
 
     if [ ! -d "${OXIDE_DATA_PVC}" ]; then
         echo "[startup] First boot: seeding Oxide data directory on PVC..."
-        cp -rp "${OXIDE_DATA_IMAGE}" "${OXIDE_DATA_PVC}"
+        if [ -d "${OXIDE_DATA_IMAGE}" ]; then
+            cp -rp "${OXIDE_DATA_IMAGE}" "${OXIDE_DATA_PVC}"
+        else
+            # Oxide hasn't created oxide/data yet (clean image, first run) — create
+            # an empty dir on the PVC; Oxide will populate it on first server start.
+            mkdir -p "${OXIDE_DATA_PVC}"
+        fi
     fi
 
     rm -rf "${OXIDE_DATA_IMAGE}"

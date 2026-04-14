@@ -1,0 +1,274 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rust-server.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "rust-server.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Recreate is mandatory — the world PVC is ReadWriteOnce and two server processes
+  # cannot share the same world data. RollingUpdate would cause the old pod to block
+  # the new one from mounting the volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "rust-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "rust-server.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Allow 120s for world state flush on SIGTERM (Rust flushes saves on graceful exit)
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: rust-server
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: game-udp
+              containerPort: {{ .Values.service.gamePort }}
+              protocol: UDP
+            - name: game-tcp
+              containerPort: {{ .Values.service.gamePort }}
+              protocol: TCP
+            - name: rcon
+              containerPort: {{ .Values.service.rconPort }}
+              protocol: TCP
+          env:
+            # ── Server identity ─────────────────────────────────────────────
+            - name: RUST_SERVER_NAME
+              value: {{ .Values.server.name | quote }}
+            - name: RUST_SERVER_DESCRIPTION
+              value: {{ .Values.server.description | quote }}
+            - name: RUST_SERVER_TAGS
+              value: {{ .Values.server.tags | quote }}
+            - name: RUST_SERVER_URL
+              value: {{ .Values.server.url | quote }}
+            - name: RUST_SERVER_HEADERIMAGE
+              value: {{ .Values.server.headerImage | quote }}
+            - name: RUST_SERVER_LOGO
+              value: {{ .Values.server.logo | quote }}
+            # ── World ────────────────────────────────────────────────────────
+            - name: RUST_SERVER_SEED
+              value: {{ .Values.server.seed | quote }}
+            - name: RUST_SERVER_WORLDSIZE
+              value: {{ .Values.server.worldSize | quote }}
+            - name: RUST_SERVER_MAXPLAYERS
+              value: {{ .Values.server.maxPlayers | quote }}
+            - name: RUST_SERVER_LEVEL
+              value: {{ .Values.server.level | quote }}
+            {{- if .Values.server.pve }}
+            - name: RUST_SERVER_PVE
+              value: {{ .Values.server.pve | quote }}
+            {{- end }}
+            {{- if .Values.server.radiation }}
+            - name: RUST_SERVER_RADIATION
+              value: {{ .Values.server.radiation | quote }}
+            {{- end }}
+            {{- if .Values.server.tickrate }}
+            - name: RUST_SERVER_TICKRATE
+              value: {{ .Values.server.tickrate | quote }}
+            {{- end }}
+            {{- if .Values.server.fps }}
+            - name: RUST_SERVER_FPS
+              value: {{ .Values.server.fps | quote }}
+            {{- end }}
+            {{- if .Values.server.adminSteamIds }}
+            - name: RUST_ADMIN_STEAMIDS
+              value: {{ .Values.server.adminSteamIds | quote }}
+            {{- end }}
+            {{- if .Values.server.extraArgs }}
+            - name: RUST_SERVER_EXTRA_ARGS
+              value: {{ .Values.server.extraArgs | quote }}
+            {{- end }}
+            # ── Ports — shifted to loopback when WAF sidecar is active ─────
+            - name: RUST_SERVER_PORT
+              value: {{ if .Values.waf.enabled }}{{ add 28015 .Values.waf.portOffset | quote }}{{ else }}"28015"{{ end }}
+            - name: RUST_SERVER_IP
+              value: {{ if .Values.waf.enabled }}"127.0.0.1"{{ else }}"0.0.0.0"{{ end }}
+            - name: RUST_QUERY_PORT
+              value: {{ if .Values.waf.enabled }}{{ add 28017 .Values.waf.portOffset | quote }}{{ else }}"28017"{{ end }}
+            # ── RCON ─────────────────────────────────────────────────────────
+            - name: RUST_RCON_PORT
+              value: {{ if .Values.waf.enabled }}{{ add (.Values.rcon.port | int) .Values.waf.portOffset | quote }}{{ else }}{{ .Values.rcon.port | quote }}{{ end }}
+            - name: RUST_RCON_IP
+              value: {{ if .Values.waf.enabled }}"127.0.0.1"{{ else }}"0.0.0.0"{{ end }}
+            {{- if .Values.rcon.existingSecret }}
+            - name: RUST_RCON_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.rcon.existingSecret }}
+                  key: {{ .Values.rcon.secretKey }}
+            {{- else if .Values.rcon.password }}
+            - name: RUST_RCON_PASSWORD
+              value: {{ .Values.rcon.password | quote }}
+            {{- end }}
+            # ── Oxide / plugins ──────────────────────────────────────────────
+            - name: OXIDE
+              value: {{ .Values.oxide.enabled | quote }}
+            - name: PVP_MODE
+              value: {{ .Values.oxide.pvpMode | quote }}
+            - name: RUST_PLUGINS
+              value: {{ .Values.oxide.plugins | quote }}
+            - name: PLUGIN_SOURCE
+              value: {{ .Values.oxide.pluginSource | quote }}
+            - name: PLUGIN_UMOD_FALLBACK
+              value: {{ .Values.oxide.pluginUmodFallback | quote }}
+            {{- if .Values.oxide.disabledPlugins }}
+            - name: OXIDE_DISABLED_PLUGINS
+              value: {{ .Values.oxide.disabledPlugins | quote }}
+            {{- end }}
+            # ── Wipe schedule ────────────────────────────────────────────────
+            - name: WIPE_SCHED
+              value: {{ .Values.wipe.sched | quote }}
+            - name: WIPE_DAY
+              value: {{ .Values.wipe.day | quote }}
+            - name: WIPE_TIME
+              value: {{ .Values.wipe.time | quote }}
+            - name: WIPE_BP
+              value: {{ .Values.wipe.bp | quote }}
+            # ── DDoS protection ──────────────────────────────────────────────
+            - name: DDOS_PROTECT
+              value: {{ ternary "1" "0" .Values.ddos.enabled | quote }}
+            - name: DDOS_UDP_RATE
+              value: {{ .Values.ddos.udpRate | quote }}
+            - name: DDOS_UDP_BURST
+              value: {{ .Values.ddos.udpBurst | quote }}
+            # ── Performance ──────────────────────────────────────────────────
+            - name: MONO_MAX_HEAP
+              value: {{ .Values.perf.monoMaxHeap | quote }}
+            {{- if .Values.perf.cpuCores }}
+            - name: RUST_CPU_CORES
+              value: {{ .Values.perf.cpuCores | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: {{ .Values.ddos.enabled }}
+            readOnlyRootFilesystem: false  # game server writes logs, world data, plugin configs
+            capabilities:
+              drop: ["ALL"]
+              {{- if .Values.ddos.enabled }}
+              add: ["NET_ADMIN"]   # required for iptables DDoS rate limiting
+              {{- end }}
+          livenessProbe:
+            exec:
+              command: ["pgrep", "-f", "RustDedicated"]
+            # World generation on first boot can take 10+ minutes — long start period
+            # prevents K8s from killing the pod during initial world gen.
+            initialDelaySeconds: 600
+            periodSeconds: 60
+            failureThreshold: 3
+            timeoutSeconds: 5
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: server-data
+              mountPath: /steamcmd/rust/server
+          {{- end }}
+        {{- if .Values.waf.enabled }}
+        - name: rust-waf
+          image: "{{ .Values.waf.image.repository }}:{{ .Values.waf.image.tag }}"
+          imagePullPolicy: {{ .Values.waf.image.pullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: game-udp
+              containerPort: {{ .Values.service.gamePort }}
+              protocol: UDP
+            - name: rcon-tcp
+              containerPort: {{ .Values.rcon.port | int }}
+              protocol: TCP
+            - name: query-udp
+              containerPort: 28017
+              protocol: UDP
+            - name: waf-api
+              containerPort: 8080
+              protocol: TCP
+            - name: waf-metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: WAF_LISTEN_GAME_PORT
+              value: {{ .Values.service.gamePort | quote }}
+            - name: WAF_UPSTREAM_GAME_PORT
+              value: {{ add .Values.service.gamePort .Values.waf.portOffset | quote }}
+            - name: WAF_LISTEN_RCON_PORT
+              value: {{ .Values.rcon.port | quote }}
+            - name: WAF_UPSTREAM_RCON_PORT
+              value: {{ add (.Values.rcon.port | int) .Values.waf.portOffset | quote }}
+            - name: WAF_LISTEN_QUERY_PORT
+              value: "28017"
+            - name: WAF_UPSTREAM_QUERY_PORT
+              value: {{ add 28017 .Values.waf.portOffset | quote }}
+            - name: WAF_RATE_LIMIT_PPS
+              value: {{ .Values.waf.rateLimitPPS | quote }}
+            - name: WAF_FLOOD_THRESHOLD_CPS
+              value: {{ .Values.waf.floodThresholdCPS | quote }}
+            - name: WAF_RCON_BAN_AFTER
+              value: {{ .Values.waf.rconBanAfterFailures | quote }}
+            - name: WAF_AIMBOT_CV
+              value: {{ .Values.waf.aimbotTimingCV | quote }}
+            - name: WAF_PRIORITY_STEAM_IDS
+              value: {{ .Values.waf.prioritySteamIds | default .Values.server.adminSteamIds | quote }}
+            - name: WAF_USERS_CFG_PATH
+              value: {{ printf "/steamcmd/rust/server/%s/cfg/users.cfg" .Values.server.identity | quote }}
+            - name: WAF_BANS_CFG_PATH
+              value: {{ printf "/steamcmd/rust/server/%s/cfg/bans.cfg" .Values.server.identity | quote }}
+            - name: WAF_CFG_POLL_INTERVAL
+              value: {{ .Values.waf.cfgPollInterval | quote }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: server-data
+              mountPath: /steamcmd/rust/server
+              readOnly: true
+          {{- end }}
+          resources:
+            {{- toYaml .Values.waf.resources | nindent 12 }}
+        {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: server-data
+          persistentVolumeClaim:
+            claimName: {{ include "rust-server.pvcName" . }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

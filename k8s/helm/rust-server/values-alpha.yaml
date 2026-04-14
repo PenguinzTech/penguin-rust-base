@@ -1,0 +1,27 @@
+# Alpha overrides — local MicroK8s
+image:
+  repository: localhost:32000/penguin-rust-base
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+server:
+  name: "Rust Alpha Test Server"
+  seed: "99999"
+  worldSize: "1000"   # smallest map — fast world gen for local testing
+
+# Reduced resources for local testing
+resources:
+  requests:
+    cpu: "1"
+    memory: "4Gi"
+  limits:
+    cpu: "2"
+    memory: "8Gi"
+
+perf:
+  monoMaxHeap: "6g"
+
+service:
+  type: NodePort
+  gameNodePort: 30015   # accessible at localhost:30015
+  rconNodePort: 30016   # accessible at localhost:30016
