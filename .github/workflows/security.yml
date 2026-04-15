@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Lint Dockerfile with hadolint
         uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5  # v3.3.0
@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
@@ -56,12 +56,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0
 
       - name: Scan for secrets with gitleaks
-        uses: gitleaks/gitleaks-action@bf2dc8e55639c1e091e9b45970152e4313705814
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -72,14 +72,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Scan IaC with Checkov (Docker checks only)
         uses: bridgecrewio/checkov-action@de2bfaecd21d58ef232e0d2a3391c33c32c460d7
         with:
           directory: docker/
           check: CKV_DOCKER_1,CKV_DOCKER_2,CKV_DOCKER_3,CKV_DOCKER_4,CKV_DOCKER_5,CKV_DOCKER_6,CKV_DOCKER_7,CKV_DOCKER_8,CKV_DOCKER_9,CKV_DOCKER_10,CKV_DOCKER_11,CKV_DOCKER_12,CKV_DOCKER_13,CKV_DOCKER_14,CKV_DOCKER_15,CKV_DOCKER_16,CKV_DOCKER_17,CKV_DOCKER_18,CKV_DOCKER_19,CKV_DOCKER_20,CKV_DOCKER_21,CKV_DOCKER_22
-          soft-fail: false
+          soft_fail: false
 
   # Scan built Docker image for vulnerability findings (CRITICAL, HIGH severity only)
   # Only runs on schedule/manual dispatch — the image must already be built and
