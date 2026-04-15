@@ -76,6 +76,41 @@ var (
 			Help: "Total SteamID blocks issued",
 		},
 	)
+
+	ReconnectStorms = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_reconnect_storms_total",
+		Help: "Reconnect storm events detected",
+	})
+
+	IncompleteHandshakes = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_incomplete_handshakes_total",
+		Help: "Incomplete handshake flood events detected",
+	})
+
+	EntropyDrops = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_entropy_drops_total",
+		Help: "High-entropy payload packets flagged",
+	})
+
+	IPChurnEvents = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_ip_churn_events_total",
+		Help: "IP churn (VPN-hop) events detected",
+	})
+
+	BurstDrops = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_burst_drops_total",
+		Help: "Packet burst events flagged",
+	})
+
+	AmplificationBlocks = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_amplification_blocks_total",
+		Help: "UDP amplification events detected",
+	})
+
+	GeoVelocityEvents = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "waf_geo_velocity_events_total",
+		Help: "Geo-velocity impossible travel events detected",
+	})
 )
 
 // Handler returns the Prometheus metrics HTTP handler.

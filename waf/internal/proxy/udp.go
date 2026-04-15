@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/penguintechinc/penguin-rust-base/waf/internal/detect"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/metrics"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/rules"
 )
@@ -157,6 +158,101 @@ func (u *UDPProxy) inspectAndForward(srcAddr *net.UDPAddr, payload []byte, upstr
 		log.Printf("[UDP] Detection %s: IP=%s SteamID=%d Detail=%s", det.Heuristic, det.IP.String(), det.SteamID, det.Detail)
 	}
 
+	// Step 10a: Geo-velocity impossible travel detection
+	if p := u.pipeline.GeoVel; p != nil {
+		if p.RecordConnect(srcIP, steamID) {
+			metrics.GeoVelocityEvents.Inc()
+			switch p.Mode() {
+			case detect.ModeBlock:
+				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
+				log.Printf("[UDP] Drop geo-velocity: IP=%s SteamID=%d", srcIP.String(), steamID)
+				return
+			case detect.ModeMonitor:
+				log.Printf("[UDP] Monitor geo-velocity: IP=%s SteamID=%d", srcIP.String(), steamID)
+			}
+		}
+	}
+
+	// Step 10b: Reconnect storm detection
+	if p := u.pipeline.Reconnect; p != nil {
+		if p.RecordAuth(srcIP, steamID) {
+			metrics.ReconnectStorms.Inc()
+			switch p.Mode() {
+			case detect.ModeBlock:
+				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
+				log.Printf("[UDP] Drop reconnect storm: IP=%s SteamID=%d", srcIP.String(), steamID)
+				return
+			case detect.ModeMonitor:
+				log.Printf("[UDP] Monitor reconnect storm: IP=%s SteamID=%d", srcIP.String(), steamID)
+			}
+		}
+	}
+
+	// Step 10c: Incomplete handshake flood detection
+	if p := u.pipeline.Handshake; p != nil {
+		if p.RecordPacket(srcIP) {
+			metrics.IncompleteHandshakes.Inc()
+			switch p.Mode() {
+			case detect.ModeBlock:
+				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
+				log.Printf("[UDP] Drop incomplete handshake flood: IP=%s", srcIP.String())
+				return
+			case detect.ModeMonitor:
+				log.Printf("[UDP] Monitor incomplete handshake flood: IP=%s", srcIP.String())
+			}
+		}
+	}
+
+	// Step 10d: High-entropy payload detection
+	if p := u.pipeline.Entropy; p != nil {
+		if p.Analyze(payload) {
+			metrics.EntropyDrops.Inc()
+			switch p.Mode() {
+			case detect.ModeBlock:
+				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
+				log.Printf("[UDP] Drop high-entropy payload: IP=%s SteamID=%d", srcIP.String(), steamID)
+				return
+			case detect.ModeMonitor:
+				log.Printf("[UDP] Monitor high-entropy payload: IP=%s SteamID=%d", srcIP.String(), steamID)
+			}
+		}
+	}
+
+	// Step 10e: IP churn (VPN-hop) detection
+	if p := u.pipeline.IPChurn; p != nil {
+		if p.RecordConnect(srcIP, steamID) {
+			metrics.IPChurnEvents.Inc()
+			switch p.Mode() {
+			case detect.ModeBlock:
+				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
+				log.Printf("[UDP] Drop IP churn: IP=%s SteamID=%d", srcIP.String(), steamID)
+				return
+			case detect.ModeMonitor:
+				log.Printf("[UDP] Monitor IP churn: IP=%s SteamID=%d", srcIP.String(), steamID)
+			}
+		}
+	}
+
+	// Step 10f: Packet burst detection
+	if p := u.pipeline.Burst; p != nil {
+		if p.RecordPacket(srcIP) {
+			metrics.BurstDrops.Inc()
+			switch p.Mode() {
+			case detect.ModeBlock:
+				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
+				log.Printf("[UDP] Drop packet burst: IP=%s SteamID=%d", srcIP.String(), steamID)
+				return
+			case detect.ModeMonitor:
+				log.Printf("[UDP] Monitor packet burst: IP=%s SteamID=%d", srcIP.String(), steamID)
+			}
+		}
+	}
+
+	// Step 10g: UDP amplification detection (record inbound request)
+	if p := u.pipeline.Amplify; p != nil {
+		p.RecordRequest(srcIP, len(payload))
+	}
+
 	// Step 11: Rule engine
 	matched, action, ruleID := u.pipeline.Rules.Evaluate(srcIP, steamID, payload, u.port, 0, 0, len(payload), 0)
 	if matched {
@@ -239,6 +335,21 @@ func (u *UDPProxy) readUpstreamResponses(dstAddr *net.UDPAddr, upConn *net.UDPCo
 			upConn.Close()
 			u.connMap.Delete(dstAddr.String())
 			return
+		}
+
+		// Amplification: record response bytes; flag if ratio exceeds threshold
+		if p := u.pipeline.Amplify; p != nil {
+			if p.RecordResponse(dstAddr.IP, n) {
+				metrics.AmplificationBlocks.Inc()
+				switch p.Mode() {
+				case detect.ModeBlock:
+					metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
+					log.Printf("[UDP] Drop amplification response: client=%s", dstAddr.String())
+					continue
+				case detect.ModeMonitor:
+					log.Printf("[UDP] Monitor amplification response: client=%s", dstAddr.String())
+				}
+			}
 		}
 
 		if u.listener != nil {
