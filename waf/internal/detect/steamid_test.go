@@ -2,6 +2,7 @@ package detect
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"testing"
 )
@@ -194,7 +195,7 @@ func TestCount(t *testing.T) {
 
 	for i, steamID := range steamIDs {
 		// Each SteamID gets mapped to a unique IP
-		ip := net.ParseIP("192.168.1." + string(byte(i+1)))
+		ip := net.ParseIP(fmt.Sprintf("192.168.1.%d", i+1))
 		m.Record(ip, steamID)
 
 		count := m.Count()

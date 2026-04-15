@@ -18,6 +18,7 @@ import (
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/detect"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/metrics"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/proxy"
+	"github.com/penguintechinc/penguin-rust-base/waf/internal/rcon"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/rules"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/state"
 )
@@ -54,6 +55,43 @@ func main() {
 		log.Fatalf("Invalid WAF_CFG_POLL_INTERVAL: %v", err)
 	}
 
+	// Reconnect detector
+	reconnectMode := detect.ParseDetectorMode(getEnv("WAF_RECONNECT_MODE", "monitor"))
+	reconnectMaxPerWindow := getEnvInt("WAF_RECONNECT_MAX_PER_WINDOW", 10)
+	reconnectWindow := getEnvDuration("WAF_RECONNECT_WINDOW", 60*time.Second)
+
+	// Handshake tracker
+	handshakeMode := detect.ParseDetectorMode(getEnv("WAF_HANDSHAKE_MODE", "monitor"))
+	handshakeMaxPending := getEnvInt("WAF_HANDSHAKE_MAX_PENDING", 20)
+	handshakeTimeout := getEnvDuration("WAF_HANDSHAKE_TIMEOUT", 30*time.Second)
+
+	// Entropy detector
+	entropyMode := detect.ParseDetectorMode(getEnv("WAF_ENTROPY_MODE", "monitor"))
+	entropyThreshold := getEnvFloat("WAF_ENTROPY_THRESHOLD", 7.5)
+
+	// IP churn detector
+	ipChurnMode := detect.ParseDetectorMode(getEnv("WAF_IPCHURN_MODE", "monitor"))
+	ipChurnMaxIPs := getEnvInt("WAF_IPCHURN_MAX_IPS", 5)
+	ipChurnWindow := getEnvDuration("WAF_IPCHURN_WINDOW", 10*time.Minute)
+
+	// Burst detector
+	burstMode := detect.ParseDetectorMode(getEnv("WAF_BURST_MODE", "monitor"))
+	burstMax := getEnvInt("WAF_BURST_MAX", 200)
+	burstWindow := getEnvDuration("WAF_BURST_WINDOW", 1*time.Second)
+
+	// Amplification guard
+	amplifyMode := detect.ParseDetectorMode(getEnv("WAF_AMPLIFY_MODE", "monitor"))
+	amplifyMaxRatio := getEnvFloat("WAF_AMPLIFY_MAX_RATIO", 50.0)
+
+	// GeoVelocity detector
+	geoVelMode := detect.ParseDetectorMode(getEnv("WAF_GEOVEL_MODE", "monitor"))
+	geoVelMaxKmH := getEnvFloat("WAF_GEOVEL_MAX_KMH", 1000.0)
+	geoVelDBPath := getEnv("WAF_GEOVEL_DB_PATH", "")
+
+	// RCON notifier (for Task 12)
+	rconNotifyEnabled := os.Getenv("WAF_RCON_NOTIFY_ENABLED") == "true" || os.Getenv("WAF_RCON_NOTIFY_ENABLED") == "1"
+	rconNotifyPassword := getEnv("WAF_RCON_NOTIFY_PASSWORD", "")
+
 	log.Printf("[WAF] Starting WAF sidecar")
 	log.Printf("[WAF] Game: %s -> %s", gameListenPort, gameUpstreamPort)
 	log.Printf("[WAF] RCON: %s -> %s", rconListenPort, rconUpstreamPort)
@@ -82,18 +120,50 @@ func main() {
 	flood := detect.NewFloodDetector(floodThresholdCPS)
 	rconTracker := detect.NewRCONTracker(rconBanAfter)
 	patterns := detect.NewPatternDetector(aimbotCV)
+	reconnect := detect.NewReconnectDetector(reconnectMode, reconnectMaxPerWindow, reconnectWindow)
+	handshake := detect.NewHandshakeTracker(handshakeMode, handshakeMaxPending, handshakeTimeout)
+	entropy := detect.NewEntropyDetector(entropyMode, entropyThreshold)
+	ipChurn := detect.NewIPChurnDetector(ipChurnMode, ipChurnMaxIPs, ipChurnWindow)
+	burst := detect.NewBurstDetector(burstMode, burstMax, burstWindow)
+	amplify := detect.NewAmplificationGuard(amplifyMode, amplifyMaxRatio)
+
+	var geoVel *detect.GeoVelocityDetector
+	if geoVelDBPath != "" {
+		geoVel, err = detect.NewGeoVelocityDetector(geoVelMode, geoVelMaxKmH, geoVelDBPath)
+		if err != nil {
+			log.Printf("[WAF] GeoVelocity detector disabled: %v", err)
+			geoVel = nil
+		}
+	}
 
 	// Create rules engine
 	rulesEngine := rules.NewEngine()
 
+	// Create RCON notifier if enabled
+	var rconNotifier *rcon.Notifier
+	if rconNotifyEnabled {
+		rconNotifier = rcon.NewNotifier("ws://127.0.0.1:"+rconUpstreamPort, rconNotifyPassword, 64)
+		rconNotifier.Start()
+		defer rconNotifier.Stop()
+		log.Printf("[WAF] RCON notifier enabled -> ws://127.0.0.1:%s", rconUpstreamPort)
+	}
+
 	// Create pipeline
 	pipeline := &proxy.Pipeline{
-		Store:    store,
-		Mapper:   mapper,
-		Limiter:  limiter,
-		Flood:    flood,
-		Patterns: patterns,
-		Rules:    rulesEngine,
+		Store:     store,
+		Mapper:    mapper,
+		Limiter:   limiter,
+		Flood:     flood,
+		Patterns:  patterns,
+		Rules:     rulesEngine,
+		Reconnect: reconnect,
+		Handshake: handshake,
+		Entropy:   entropy,
+		IPChurn:   ipChurn,
+		Burst:     burst,
+		Amplify:   amplify,
+		GeoVel:    geoVel,
+		Notifier:  rconNotifier,
 	}
 
 	// Create API server
@@ -228,6 +298,19 @@ func getEnvInt(key string, defaultVal int) int {
 	val, err := strconv.Atoi(valStr)
 	if err != nil {
 		log.Fatalf("Invalid value for %s: %v", key, err)
+	}
+	return val
+}
+
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	valStr := os.Getenv(key)
+	if valStr == "" {
+		return defaultVal
+	}
+	val, err := time.ParseDuration(valStr)
+	if err != nil {
+		log.Printf("[WAF] Invalid value for %s: %v, using default %v", key, err, defaultVal)
+		return defaultVal
 	}
 	return val
 }

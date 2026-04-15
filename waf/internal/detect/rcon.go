@@ -27,9 +27,9 @@ func NewRCONTracker(banAfter int) *RCONTracker {
 }
 
 // RecordFailure increments the failure count for the given IP.
-// If count reaches banAfter, the IP is blocked in the store.
+// If count reaches banAfter, the IP is blocked in the store (if store is non-nil).
 func (t *RCONTracker) RecordFailure(ip net.IP, store *state.Store) {
-	if ip == nil || store == nil {
+	if ip == nil {
 		return
 	}
 
@@ -44,7 +44,7 @@ func (t *RCONTracker) RecordFailure(ip net.IP, store *state.Store) {
 	record.mu.Unlock()
 
 	// Block the IP if threshold exceeded
-	if count >= t.banAfter {
+	if count >= t.banAfter && store != nil {
 		store.BlockIP(ip, 0, "RCON_AUTH_FAILURE")
 	}
 }

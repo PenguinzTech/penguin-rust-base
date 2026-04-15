@@ -107,14 +107,15 @@ func TestRecordFailureNilIP(t *testing.T) {
 }
 
 func TestRecordFailureNilStore(t *testing.T) {
-	tracker := NewRCONTracker(3)
+	// banAfter=1 so a single failure reaches the threshold and IsBlocked returns true
+	tracker := NewRCONTracker(1)
 
 	ip := net.ParseIP("192.168.1.1")
 
 	// Should not panic with nil store
 	tracker.RecordFailure(ip, nil)
 
-	// Failure should still be recorded
+	// Failure should still be recorded (count incremented even when store is nil)
 	if !tracker.IsBlocked(ip) {
 		t.Error("RecordFailure() should record failure even with nil store")
 	}

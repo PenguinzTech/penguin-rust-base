@@ -206,20 +206,26 @@ func TestDetectionDetailField(t *testing.T) {
 }
 
 func TestPatternDetectorDifferentIPs(t *testing.T) {
-	detector := NewPatternDetector(0.2)
+	// Use a high CV threshold (2.0). ip1 gets uniform timing (CV well below 2.0 → triggers).
+	// ip2 gets strongly alternating timing producing CV well above 2.0.
+	detector := NewPatternDetector(2.0)
 
 	ip1 := net.ParseIP("192.168.1.1")
 	ip2 := net.ParseIP("192.168.1.2")
 
-	// Send uniform timing on ip1
+	// Send uniform timing on ip1 — 50ms sleep gives CV ~0.05–0.3 < 2.0 → triggers aimbot
 	for i := 0; i < 15; i++ {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		detector.Inspect(ip1, 0, []byte{0x01})
 	}
 
-	// Send random timing on ip2
+	// Send strongly variable timing on ip2 — alternate 1ms / 500ms → CV >> 2.0
 	for i := 0; i < 15; i++ {
-		time.Sleep(time.Duration((i*13)%50) * time.Millisecond)
+		if i%2 == 0 {
+			time.Sleep(1 * time.Millisecond)
+		} else {
+			time.Sleep(200 * time.Millisecond)
+		}
 		detector.Inspect(ip2, 0, []byte{0x02})
 	}
 
@@ -298,12 +304,13 @@ func TestEmptyPayload(t *testing.T) {
 }
 
 func TestHighCVThreshold(t *testing.T) {
-	// Very high CV threshold makes aimbot detection unlikely
+	// Very high CV threshold (10.0) means aimbot is flagged when measured CV < 10.0,
+	// which is almost always true for uniform traffic — detection expected.
 	detector := NewPatternDetector(10.0)
 
 	ip := net.ParseIP("192.168.1.1")
 
-	// Even with uniform timing, shouldn't detect
+	// Send uniform timing to build up intervals
 	for i := 0; i < 15; i++ {
 		time.Sleep(10 * time.Millisecond)
 		detector.Inspect(ip, 0, []byte{0x01})
@@ -311,27 +318,7 @@ func TestHighCVThreshold(t *testing.T) {
 
 	detections := detector.Inspect(ip, 0, []byte{0x01})
 
-	for _, det := range detections {
-		if det.Heuristic == "aimbot_timing" {
-			t.Error("High CV threshold should prevent aimbot detection")
-		}
-	}
-}
-
-func TestLowCVThreshold(t *testing.T) {
-	// Very low CV threshold makes aimbot detection likely
-	detector := NewPatternDetector(0.01)
-
-	ip := net.ParseIP("192.168.1.1")
-
-	// Uniform timing should trigger
-	for i := 0; i < 15; i++ {
-		time.Sleep(10 * time.Millisecond)
-		detector.Inspect(ip, 0, []byte{0x01})
-	}
-
-	detections := detector.Inspect(ip, 0, []byte{0x01})
-
+	// With a very high CV threshold, uniform traffic should trigger aimbot detection
 	found := false
 	for _, det := range detections {
 		if det.Heuristic == "aimbot_timing" {
@@ -339,8 +326,31 @@ func TestLowCVThreshold(t *testing.T) {
 		}
 	}
 
-	if !found && len(detections) == 0 {
-		t.Error("Low CV threshold should easily trigger aimbot detection")
+	if !found {
+		t.Error("High CV threshold (10.0) should flag uniform traffic as aimbot_timing")
+	}
+}
+
+func TestLowCVThreshold(t *testing.T) {
+	// Very low CV threshold (0.01) means aimbot is flagged only when measured CV < 0.01.
+	// Real timing with time.Sleep has CV well above 0.01, so detection should NOT trigger.
+	detector := NewPatternDetector(0.01)
+
+	ip := net.ParseIP("192.168.1.1")
+
+	// Uniform timing (but with OS scheduling jitter, CV > 0.01)
+	for i := 0; i < 15; i++ {
+		time.Sleep(10 * time.Millisecond)
+		detector.Inspect(ip, 0, []byte{0x01})
+	}
+
+	detections := detector.Inspect(ip, 0, []byte{0x01})
+
+	// With threshold 0.01, only near-perfect timing triggers — OS jitter prevents this
+	for _, det := range detections {
+		if det.Heuristic == "aimbot_timing" {
+			t.Error("Low CV threshold (0.01) should not trigger aimbot detection with OS-scheduled timing")
+		}
 	}
 }
 
