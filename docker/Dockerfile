@@ -221,9 +221,17 @@ RUN set -eu; \
 # ─── Built-in plugins ────────────────────────────────────────────────────────
 # AutoAdmin is baked into the base image so every downstream image gets
 # automatic permission provisioning and admin group management.
+#
+# plugins/patched/ — upstream umod plugins with removed Oxide API fixes applied:
+#   FindByID→FindAwakeOrSleeping, net.connection→Connection,
+#   ConVar.Chat.ChatChannel→Chat.ChatChannel, BuildingPrivlidge→BuildingPrivilege,
+#   CommunityEntity.ServerInstance→CuiHelper foreach loop.
+# These are excluded from the penguin-rust-plugins scan pipeline and baked here
+# instead so servers get working patched versions. Oxide only scans oxide/plugins/
+# root — subdirectories are ignored, so patched plugins are copied to root.
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/PluginManager.cs /steamcmd/rust/oxide/plugins/
-COPY --chown=rustserver:rustserver plugins/patched/ /steamcmd/rust/oxide/plugins/patched/
+COPY --chown=rustserver:rustserver plugins/patched/ /steamcmd/rust/oxide/plugins/
 
 # ─── Shared library ─────────────────────────────────────────────────────────
 # Functions sourced by start.sh, check-plugin-updates.sh, and wipe-check.sh.
