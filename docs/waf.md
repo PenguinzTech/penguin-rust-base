@@ -39,6 +39,45 @@ Game server (28115 / 28116 / 28117)  ◄─┘
 | **Packet anomalies** | Malformed or oversized packets dropped before the game server sees them. |
 | **Aimbot heuristics** | Coefficient of variation (CV) of inter-packet timing intervals. Bot-like timing consistency (low CV) is flagged. |
 | **Priority bypass** | Admin/owner Steam64 IDs always forwarded immediately — skip all heuristics and rate checks. |
+| **Reconnect storm** | Steam64 ID auth frequency in rolling window. If a player reconnects more than N times in the window, flagged. Default: 10 per 60s. |
+| **Handshake flood** | IPs that send packets but never complete Steam auth. Tracked per-IP; flagged if incomplete attempts exceed threshold. Default: 20 pending / 30s timeout. |
+| **Payload entropy** | Shannon entropy of packet payload. High entropy (>7.5 bits/byte) flags encrypted tunnels or randomised flood payloads. |
+| **IP churn** | Single Steam64 ID seen from too many distinct IPs in a window. Flags VPN-hopping ban evasion. Default: 5 IPs per 10min. |
+| **Burst detection** | Per-IP packet burst within a short window. Separate from sustained flood — catches short spike attacks. Default: 200 packets per 1s. |
+| **Amplification guard** | Tracks request vs response byte ratio per IP. Ratio >50x flags UDP amplification / reflection attacks. |
+| **Geo-velocity** | Impossible travel detection using MaxMind GeoLite2 DB. Flags same Steam64 ID connecting from geographically impossible locations too quickly (default: >1000 km/h). Opt-in: requires `WAF_GEOVEL_DB_PATH`. |
+
+### Detector Modes
+
+Every protection supports three modes, configured independently per detector:
+
+| Mode | Behaviour |
+|---|---|
+| `monitor` | Detects and logs/alerts; **does not block traffic**. Default for all detectors. |
+| `block` | Detects and drops/blocks the packet or connection. |
+| `off` | Detector disabled entirely. |
+
+Set via environment variable — e.g. `WAF_RECONNECT_MODE=block`. Default is `monitor` for all detectors. Roll out new detectors in monitor mode first to tune thresholds without risk, then switch to block once confirmed.
+
+The WAF can also notify in-game admins via RCON console on any monitor or block event (see [RCON Notifications](#rcon-notifications) below).
+
+### RCON Notifications
+
+When enabled, the WAF connects to the game server's loopback RCON port and sends console messages whenever a detector fires in `monitor` or `block` mode. Admins see alerts in real time without checking logs.
+
+Enable:
+```bash
+WAF_RCON_NOTIFY_ENABLED=true
+WAF_RCON_NOTIFY_PASSWORD=<your-rcon-password>
+```
+
+Messages appear in the RCON console as:
+```
+WAF [monitor]: reconnect_storm 1.2.3.4 (76561198000000000)
+WAF [blocked]: geo_velocity 5.6.7.8 (76561198000000001)
+```
+
+The notifier is async and non-blocking — packet processing is never delayed by RCON latency. Messages are dropped (not queued indefinitely) if the RCON server is unavailable.
 
 ### With Oxide (Optional Enhancements)
 
@@ -117,6 +156,27 @@ When `waf.enabled=false` (default), the sidecar container is not added to the po
 | `WAF_USERS_CFG_PATH` | *(none)* | Path to `users.cfg` for admin sync |
 | `WAF_BANS_CFG_PATH` | *(none)* | Path to `bans.cfg` for ban sync |
 | `WAF_CFG_POLL_INTERVAL` | `5m` | How often to re-check config files |
+| `WAF_RECONNECT_MODE` | `monitor` | Reconnect storm detector mode: off/monitor/block |
+| `WAF_RECONNECT_MAX_PER_WINDOW` | `10` | Max reconnects per SteamID per window |
+| `WAF_RECONNECT_WINDOW` | `60s` | Reconnect storm rolling window |
+| `WAF_HANDSHAKE_MODE` | `monitor` | Incomplete handshake detector mode |
+| `WAF_HANDSHAKE_MAX_PENDING` | `20` | Max incomplete handshakes per IP |
+| `WAF_HANDSHAKE_TIMEOUT` | `30s` | Incomplete handshake timeout |
+| `WAF_ENTROPY_MODE` | `monitor` | Payload entropy detector mode |
+| `WAF_ENTROPY_THRESHOLD` | `7.5` | Entropy threshold in bits/byte (0–8) |
+| `WAF_IPCHURN_MODE` | `monitor` | IP churn detector mode |
+| `WAF_IPCHURN_MAX_IPS` | `5` | Max distinct IPs per SteamID per window |
+| `WAF_IPCHURN_WINDOW` | `10m` | IP churn rolling window |
+| `WAF_BURST_MODE` | `monitor` | Burst detector mode |
+| `WAF_BURST_MAX` | `200` | Max packets per IP per burst window |
+| `WAF_BURST_WINDOW` | `1s` | Burst detection window |
+| `WAF_AMPLIFY_MODE` | `monitor` | Amplification guard mode |
+| `WAF_AMPLIFY_MAX_RATIO` | `50.0` | Response/request byte ratio threshold |
+| `WAF_GEOVEL_MODE` | `monitor` | Geo-velocity detector mode |
+| `WAF_GEOVEL_MAX_KMH` | `1000.0` | Max plausible travel speed km/h |
+| `WAF_GEOVEL_DB_PATH` | *(none)* | Path to MaxMind GeoLite2-City.mmdb (required to enable) |
+| `WAF_RCON_NOTIFY_ENABLED` | `false` | Enable RCON console notifications on events |
+| `WAF_RCON_NOTIFY_PASSWORD` | *(none)* | RCON password for notification connection |
 
 ## Oxide Plugin REST API
 
@@ -233,24 +293,34 @@ The WAF lives in `waf/` at the repo root. It is built into the overlay image dur
 
 ```
 waf/
-├── cmd/waf/main.go             # Entry point, env config, goroutine wiring
+├── cmd/waf/main.go
 ├── internal/
-│   ├── api/server.go           # REST API (block, throttle, rules, stats)
-│   ├── cfg/poller.go           # bans.cfg / users.cfg file watcher
+│   ├── api/server.go
+│   ├── cfg/poller.go
 │   ├── detect/
-│   │   ├── flood.go            # Flood / connection-rate detector
-│   │   ├── patterns.go         # Packet size + timing heuristics
-│   │   ├── ratelimit.go        # Per-IP token bucket rate limiter
-│   │   ├── rcon.go             # RCON brute-force tracker
-│   │   └── steamid.go          # Steam64 → IP mapper
-│   ├── metrics/metrics.go      # Prometheus counters / gauges / histograms
+│   │   ├── amplification.go     # UDP amplification guard
+│   │   ├── burst.go             # Per-IP burst detector
+│   │   ├── entropy.go           # Shannon entropy anomaly detector
+│   │   ├── flood.go             # Flood / connection-rate detector
+│   │   ├── geovel.go            # Geo-velocity impossible travel detector
+│   │   ├── handshake.go         # Incomplete handshake flood detector
+│   │   ├── ipchurn.go           # IP churn (VPN-hop) ban evasion detector
+│   │   ├── mode.go              # DetectorMode type (off/monitor/block)
+│   │   ├── patterns.go          # Packet size + timing heuristics
+│   │   ├── ratelimit.go         # Per-IP token bucket rate limiter
+│   │   ├── rcon.go              # RCON brute-force tracker
+│   │   ├── reconnect.go         # Reconnect storm detector
+│   │   └── steamid.go           # Steam64 → IP mapper
+│   ├── metrics/metrics.go
 │   ├── proxy/
-│   │   ├── pipeline.go         # Shared pipeline struct
-│   │   ├── rcon.go             # TCP RCON proxy
-│   │   └── udp.go              # UDP game / query proxy
-│   ├── rules/engine.go         # Snort-like rule engine
-│   └── state/state.go          # Shared in-memory state (blocks, allowlist, priority)
-└── Dockerfile                  # Multi-stage Go build → debian:bookworm-slim runtime
+│   │   ├── pipeline.go
+│   │   ├── rcon.go
+│   │   └── udp.go
+│   ├── rcon/
+│   │   └── notifier.go          # Async RCON console notifier
+│   ├── rules/engine.go
+│   └── state/state.go
+└── Dockerfile
 ```
 
 ## See Also
