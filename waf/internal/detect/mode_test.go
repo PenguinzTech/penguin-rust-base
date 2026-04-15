@@ -17,12 +17,12 @@ func TestParseDetectorMode(t *testing.T) {
 		{"uppercase MONITOR", "MONITOR", ModeMonitor},
 		{"uppercase OFF", "OFF", ModeOff},
 		{"mixed case Block", "Block", ModeBlock},
-		{"empty string", "", ModeOff},
-		{"whitespace only", "   ", ModeOff},
+		{"empty string", "", ModeMonitor},
+		{"whitespace only", "   ", ModeMonitor},
 		{"whitespace padded monitor", "  monitor  ", ModeMonitor},
-		{"unknown value", "unknown", ModeOff},
-		{"garbage", "xyz", ModeOff},
-		{"invalid block", "notblock", ModeOff},
+		{"unknown value", "unknown", ModeMonitor},
+		{"garbage", "xyz", ModeMonitor},
+		{"invalid block", "notblock", ModeMonitor},
 	}
 
 	for _, tt := range tests {

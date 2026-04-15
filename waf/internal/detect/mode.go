@@ -16,14 +16,16 @@ const (
 
 // ParseDetectorMode converts a string to a DetectorMode.
 // Accepts "off", "monitor", "block" (case-insensitive).
-// Unknown values return ModeOff.
+// Unknown values and empty strings return ModeMonitor (default).
 func ParseDetectorMode(s string) DetectorMode {
 	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "off":
+		return ModeOff
 	case "monitor":
 		return ModeMonitor
 	case "block":
 		return ModeBlock
 	default:
-		return ModeOff
+		return ModeMonitor
 	}
 }
