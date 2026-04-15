@@ -19,7 +19,9 @@ type UDPProxy struct {
 	upstreamAddr string
 	pipeline     *Pipeline
 	port         int
-	connMap      sync.Map // key: string(srcAddr) → *net.UDPConn
+	listener     *net.UDPConn  // public-facing listener, used to write responses back to clients
+	connMap      sync.Map      // key: string(srcAddr) → *net.UDPConn
+	clientMap    sync.Map      // key: string(upstreamConn.LocalAddr) → *net.UDPAddr (client addr)
 }
 
 // NewUDPProxy creates a new UDP proxy.
@@ -44,6 +46,7 @@ func (u *UDPProxy) Start(ctx context.Context) error {
 		return fmt.Errorf("listen on %s: %w", u.listenAddr, err)
 	}
 	defer conn.Close()
+	u.listener = conn
 
 	upstreamUDPAddr, err := net.ResolveUDPAddr("udp", u.upstreamAddr)
 	if err != nil {
@@ -208,6 +211,9 @@ func (u *UDPProxy) forwardPacket(srcAddr *net.UDPAddr, payload []byte, upstreamA
 		}
 		u.connMap.Store(srcKey, upConn)
 
+		// Track client addr keyed by upstream conn's local addr for response routing
+		u.clientMap.Store(upConn.LocalAddr().String(), srcAddr)
+
 		// Start goroutine to read responses and forward back to client
 		go u.readUpstreamResponses(srcAddr, upConn, portStr)
 	}
@@ -235,9 +241,12 @@ func (u *UDPProxy) readUpstreamResponses(dstAddr *net.UDPAddr, upConn *net.UDPCo
 			return
 		}
 
-		// In a real implementation, we would write back to the client via the original listener.
-		// For now, we log it. A full implementation would require storing the listener conn.
-		_ = n
-		_ = portStr
+		if u.listener != nil {
+			if _, werr := u.listener.WriteToUDP(buffer[:n], dstAddr); werr != nil {
+				log.Printf("[UDP] Write response to client %s failed: %v", dstAddr.String(), werr)
+			} else {
+				metrics.PacketsTotal.WithLabelValues(portStr, "response").Inc()
+			}
+		}
 	}
 }
