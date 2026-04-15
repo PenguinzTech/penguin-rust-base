@@ -5,19 +5,27 @@ import "math"
 // EntropyDetector flags packets whose Shannon entropy exceeds a threshold.
 // High entropy (near 8 bits/byte) suggests encrypted tunnels or randomised DoS payloads.
 type EntropyDetector struct {
+	mode      DetectorMode
 	threshold float64 // bits per byte; typical range 0–8
 }
 
 // NewEntropyDetector creates a detector; threshold <= 0 disables it (always returns false).
-func NewEntropyDetector(threshold float64) *EntropyDetector {
+func NewEntropyDetector(mode DetectorMode, threshold float64) *EntropyDetector {
 	return &EntropyDetector{
+		mode:      mode,
 		threshold: threshold,
 	}
 }
 
+// Mode returns the detector's current DetectorMode.
+func (e *EntropyDetector) Mode() DetectorMode { return e.mode }
+
 // Analyze returns true if the payload's Shannon entropy exceeds the threshold.
 // Empty payload returns false.
 func (e *EntropyDetector) Analyze(payload []byte) bool {
+	if e.mode == ModeOff {
+		return false
+	}
 	// Disabled if threshold <= 0
 	if e.threshold <= 0 {
 		return false

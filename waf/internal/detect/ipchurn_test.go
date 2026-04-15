@@ -8,7 +8,7 @@ import (
 
 func TestIPChurnDetector_SingleIP(t *testing.T) {
 	// Same IP many times should never trigger churn (still 1 unique IP)
-	d := NewIPChurnDetector(3, 1*time.Second)
+	d := NewIPChurnDetector(ModeBlock, 3, 1*time.Second)
 	steamID := uint64(76561198012345678)
 
 	ip := net.ParseIP("192.168.1.1")
@@ -21,7 +21,7 @@ func TestIPChurnDetector_SingleIP(t *testing.T) {
 
 func TestIPChurnDetector_ManyIPs(t *testing.T) {
 	// maxIPs=3, connect from 4 distinct IPs → true on 4th
-	d := NewIPChurnDetector(3, 1*time.Second)
+	d := NewIPChurnDetector(ModeBlock, 3, 1*time.Second)
 	steamID := uint64(76561198012345678)
 
 	ips := []string{
@@ -46,7 +46,7 @@ func TestIPChurnDetector_ManyIPs(t *testing.T) {
 func TestIPChurnDetector_WindowExpiry(t *testing.T) {
 	// Fill to threshold, wait for window to expire, fresh IP → false (old IPs pruned)
 	window := 50 * time.Millisecond
-	d := NewIPChurnDetector(2, window)
+	d := NewIPChurnDetector(ModeBlock, 2, window)
 	steamID := uint64(76561198012345678)
 
 	// Add 2 IPs (at threshold, not yet exceeded)
@@ -72,7 +72,7 @@ func TestIPChurnDetector_WindowExpiry(t *testing.T) {
 
 func TestIPChurnDetector_ZeroSteamID(t *testing.T) {
 	// steamID=0 → always false
-	d := NewIPChurnDetector(1, 1*time.Second)
+	d := NewIPChurnDetector(ModeBlock, 1, 1*time.Second)
 	ip := net.ParseIP("192.168.1.1")
 
 	for i := 0; i < 5; i++ {
@@ -95,7 +95,7 @@ func TestIPChurnDetector_Disabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := NewIPChurnDetector(tt.maxIPs, 1*time.Second)
+			d := NewIPChurnDetector(ModeBlock, tt.maxIPs, 1*time.Second)
 			steamID := uint64(76561198012345678)
 
 			// Even with many IPs, should always be false
@@ -109,9 +109,23 @@ func TestIPChurnDetector_Disabled(t *testing.T) {
 	}
 }
 
+func TestIPChurnDetector_ModeOff(t *testing.T) {
+	d := NewIPChurnDetector(ModeOff, 1, 1*time.Second)
+	steamID := uint64(76561198099999999)
+	for i := 0; i < 10; i++ {
+		ip := net.IPv4(10, 0, 0, byte(i+1))
+		if d.RecordConnect(ip, steamID) {
+			t.Fatal("ModeOff should never trigger")
+		}
+	}
+	if d.Mode() != ModeOff {
+		t.Fatal("Mode() should return ModeOff")
+	}
+}
+
 func TestIPChurnDetector_IndependentSteamIDs(t *testing.T) {
 	// Two steamIDs each churn on their own counter independently
-	d := NewIPChurnDetector(2, 1*time.Second)
+	d := NewIPChurnDetector(ModeBlock, 2, 1*time.Second)
 	steamID1 := uint64(76561198012345678)
 	steamID2 := uint64(76561198087654321)
 

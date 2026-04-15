@@ -7,7 +7,7 @@ import (
 )
 
 func TestEntropyDetector_LowEntropyNotFlagged(t *testing.T) {
-	detector := NewEntropyDetector(3.0)
+	detector := NewEntropyDetector(ModeBlock, 3.0)
 	payload := bytes.Repeat([]byte{0xAA}, 100)
 	result := detector.Analyze(payload)
 	if result {
@@ -21,7 +21,7 @@ func TestEntropyDetector_HighEntropyFlagged(t *testing.T) {
 	for i := 0; i < 256; i++ {
 		payload[i] = byte(i)
 	}
-	detector := NewEntropyDetector(7.0)
+	detector := NewEntropyDetector(ModeBlock, 7.0)
 	result := detector.Analyze(payload)
 	if !result {
 		t.Errorf("high entropy payload should be flagged, got false")
@@ -29,7 +29,7 @@ func TestEntropyDetector_HighEntropyFlagged(t *testing.T) {
 }
 
 func TestEntropyDetector_EmptyPayload(t *testing.T) {
-	detector := NewEntropyDetector(1.0)
+	detector := NewEntropyDetector(ModeBlock, 1.0)
 	// Test nil
 	result := detector.Analyze(nil)
 	if result {
@@ -49,13 +49,13 @@ func TestEntropyDetector_Disabled(t *testing.T) {
 		payload[i] = byte(i)
 	}
 	// Test threshold = 0 (disabled)
-	detector := NewEntropyDetector(0)
+	detector := NewEntropyDetector(ModeBlock, 0)
 	result := detector.Analyze(payload)
 	if result {
 		t.Errorf("disabled detector (threshold=0) should return false, got true")
 	}
 	// Test negative threshold (disabled)
-	detector = NewEntropyDetector(-1.0)
+	detector = NewEntropyDetector(ModeBlock, -1.0)
 	result = detector.Analyze(payload)
 	if result {
 		t.Errorf("disabled detector (threshold<0) should return false, got true")
@@ -69,10 +69,24 @@ func TestEntropyDetector_AtThreshold(t *testing.T) {
 		payload[i] = byte(i)
 	}
 	// Threshold exactly equal to entropy (8.0)
-	detector := NewEntropyDetector(8.0)
+	detector := NewEntropyDetector(ModeBlock, 8.0)
 	result := detector.Analyze(payload)
 	if result {
 		t.Errorf("entropy equal to threshold should not be flagged (strictly greater), got true")
+	}
+}
+
+func TestEntropyDetector_ModeOff(t *testing.T) {
+	payload := make([]byte, 256)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+	d := NewEntropyDetector(ModeOff, 1.0)
+	if d.Analyze(payload) {
+		t.Fatal("ModeOff should never trigger")
+	}
+	if d.Mode() != ModeOff {
+		t.Fatal("Mode() should return ModeOff")
 	}
 }
 
@@ -103,14 +117,14 @@ func TestEntropyDetector_UniformDistribution(t *testing.T) {
 	}
 
 	// Test flagging with threshold < 8.0
-	detector := NewEntropyDetector(7.99)
+	detector := NewEntropyDetector(ModeBlock, 7.99)
 	result := detector.Analyze(payload)
 	if !result {
 		t.Errorf("entropy 8.0 with threshold 7.99 should be flagged, got false")
 	}
 
 	// Test not flagging with threshold > 8.0
-	detector = NewEntropyDetector(8.01)
+	detector = NewEntropyDetector(ModeBlock, 8.01)
 	result = detector.Analyze(payload)
 	if result {
 		t.Errorf("entropy 8.0 with threshold 8.01 should not be flagged, got true")

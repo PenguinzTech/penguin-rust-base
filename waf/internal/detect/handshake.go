@@ -9,6 +9,7 @@ import (
 // HandshakeTracker detects IPs that repeatedly initiate connections but never
 // complete Steam authentication. These are connection-exhaustion flood tools.
 type HandshakeTracker struct {
+	mode       DetectorMode
 	maxPending int
 	timeout    time.Duration
 	pending    sync.Map // string(ip) → *handshakeRecord
@@ -22,16 +23,23 @@ type handshakeRecord struct {
 }
 
 // NewHandshakeTracker creates a HandshakeTracker. Set maxPending=0 to disable.
-func NewHandshakeTracker(maxPending int, timeout time.Duration) *HandshakeTracker {
+func NewHandshakeTracker(mode DetectorMode, maxPending int, timeout time.Duration) *HandshakeTracker {
 	return &HandshakeTracker{
+		mode:       mode,
 		maxPending: maxPending,
 		timeout:    timeout,
 	}
 }
 
+// Mode returns the detector's current DetectorMode.
+func (h *HandshakeTracker) Mode() DetectorMode { return h.mode }
+
 // RecordPacket records a packet from ip. Returns true if the IP has too many
 // incomplete handshakes (flood detected). Thread-safe.
 func (h *HandshakeTracker) RecordPacket(ip net.IP) bool {
+	if h.mode == ModeOff {
+		return false
+	}
 	if h.maxPending <= 0 || ip == nil {
 		return false
 	}
@@ -71,7 +79,7 @@ func (h *HandshakeTracker) RecordPacket(ip net.IP) bool {
 // RecordCompletion marks the handshake for ip as complete (SteamID extracted).
 // Resets the incomplete counter for this IP.
 func (h *HandshakeTracker) RecordCompletion(ip net.IP) {
-	if ip == nil {
+	if h.mode == ModeOff || ip == nil {
 		return
 	}
 	val, ok := h.pending.Load(ip.String())

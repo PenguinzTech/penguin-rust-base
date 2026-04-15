@@ -7,7 +7,7 @@ import (
 )
 
 func TestReconnectDetector_BelowThreshold(t *testing.T) {
-	d := NewReconnectDetector(5, time.Minute)
+	d := NewReconnectDetector(ModeBlock, 5, time.Minute)
 	ip := net.ParseIP("1.2.3.4")
 	const steamID = uint64(76561198000000001)
 	for i := 0; i < 5; i++ {
@@ -18,7 +18,7 @@ func TestReconnectDetector_BelowThreshold(t *testing.T) {
 }
 
 func TestReconnectDetector_ExceedsThreshold(t *testing.T) {
-	d := NewReconnectDetector(3, time.Minute)
+	d := NewReconnectDetector(ModeBlock, 3, time.Minute)
 	ip := net.ParseIP("1.2.3.4")
 	const steamID = uint64(76561198000000002)
 	triggered := false
@@ -34,7 +34,7 @@ func TestReconnectDetector_ExceedsThreshold(t *testing.T) {
 }
 
 func TestReconnectDetector_WindowExpiry(t *testing.T) {
-	d := NewReconnectDetector(2, 100*time.Millisecond)
+	d := NewReconnectDetector(ModeBlock, 2, 100*time.Millisecond)
 	ip := net.ParseIP("1.2.3.4")
 	const steamID = uint64(76561198000000003)
 	d.RecordAuth(ip, steamID)
@@ -46,7 +46,7 @@ func TestReconnectDetector_WindowExpiry(t *testing.T) {
 }
 
 func TestReconnectDetector_ZeroSteamID(t *testing.T) {
-	d := NewReconnectDetector(1, time.Minute)
+	d := NewReconnectDetector(ModeBlock, 1, time.Minute)
 	ip := net.ParseIP("1.2.3.4")
 	for i := 0; i < 100; i++ {
 		if d.RecordAuth(ip, 0) {
@@ -56,7 +56,7 @@ func TestReconnectDetector_ZeroSteamID(t *testing.T) {
 }
 
 func TestReconnectDetector_Disabled(t *testing.T) {
-	d := NewReconnectDetector(0, time.Minute)
+	d := NewReconnectDetector(ModeBlock, 0, time.Minute)
 	ip := net.ParseIP("1.2.3.4")
 	const steamID = uint64(76561198000000004)
 	for i := 0; i < 100; i++ {
@@ -67,7 +67,7 @@ func TestReconnectDetector_Disabled(t *testing.T) {
 }
 
 func TestReconnectDetector_IndependentSteamIDs(t *testing.T) {
-	d := NewReconnectDetector(3, time.Minute)
+	d := NewReconnectDetector(ModeBlock, 3, time.Minute)
 	ip := net.ParseIP("1.2.3.4")
 	const steamA = uint64(76561198000000005)
 	const steamB = uint64(76561198000000006)
@@ -76,5 +76,19 @@ func TestReconnectDetector_IndependentSteamIDs(t *testing.T) {
 	d.RecordAuth(ip, steamA)
 	if d.RecordAuth(ip, steamB) {
 		t.Fatal("steamB should not be affected by steamA's count")
+	}
+}
+
+func TestReconnectDetector_ModeOff(t *testing.T) {
+	d := NewReconnectDetector(ModeOff, 1, time.Minute)
+	ip := net.ParseIP("1.2.3.4")
+	const steamID = uint64(76561198000000099)
+	for i := 0; i < 100; i++ {
+		if d.RecordAuth(ip, steamID) {
+			t.Fatal("ModeOff should never trigger")
+		}
+	}
+	if d.Mode() != ModeOff {
+		t.Fatal("Mode() should return ModeOff")
 	}
 }
