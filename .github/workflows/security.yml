@@ -48,6 +48,7 @@ jobs:
           shellcheck -x docker/lib-functions.sh
           shellcheck -x --source-path=docker docker/check-plugin-updates.sh
           shellcheck -x --source-path=docker docker/wipe-check.sh
+          shellcheck -x --source-path=docker docker/manage-plugin.sh
 
   # Scan repo for hardcoded secrets, API keys, credentials
   # Scans all files except .cs plugins (third-party, not our code)

@@ -222,6 +222,8 @@ RUN set -eu; \
 # AutoAdmin is baked into the base image so every downstream image gets
 # automatic permission provisioning and admin group management.
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
+COPY --chown=rustserver:rustserver plugins/PluginManager.cs /steamcmd/rust/oxide/plugins/
+COPY --chown=rustserver:rustserver plugins/patched/ /steamcmd/rust/oxide/plugins/patched/
 
 # ─── Shared library ─────────────────────────────────────────────────────────
 # Functions sourced by start.sh, check-plugin-updates.sh, and wipe-check.sh.
@@ -233,7 +235,9 @@ COPY --chown=rustserver:rustserver lib-functions.sh /usr/local/lib/penguin-rust/
 COPY --chown=rustserver:rustserver crontab /etc/penguin-rust/crontab
 COPY --chown=rustserver:rustserver check-plugin-updates.sh /usr/local/bin/check-plugin-updates.sh
 COPY --chown=rustserver:rustserver wipe-check.sh /usr/local/bin/wipe-check.sh
-RUN chmod +x /usr/local/bin/check-plugin-updates.sh /usr/local/bin/wipe-check.sh
+COPY --chown=rustserver:rustserver manage-plugin.sh /usr/local/bin/manage-plugin.sh
+RUN chmod +x /usr/local/bin/check-plugin-updates.sh /usr/local/bin/wipe-check.sh \
+             /usr/local/bin/manage-plugin.sh
 
 # ─── Startup script ──────────────────────────────────────────────────────────
 COPY --chown=rustserver:rustserver start.sh /start.sh
