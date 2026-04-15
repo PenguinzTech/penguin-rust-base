@@ -43,13 +43,13 @@ func (h *HandshakeTracker) RecordPacket(ip net.IP) bool {
 		attempts:  1,
 		firstSeen: now,
 	})
-	if !loaded {
-		return false // first packet, count=1, can't trigger yet
-	}
-
 	record := val.(*handshakeRecord)
 	record.mu.Lock()
 	defer record.mu.Unlock()
+
+	if !loaded {
+		return false // first packet, count=1, can't trigger yet
+	}
 
 	if record.completed {
 		// Previous handshake completed — reset for new session

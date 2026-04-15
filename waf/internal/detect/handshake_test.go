@@ -58,6 +58,7 @@ func TestHandshakeTracker_NilIP(t *testing.T) {
 	if h.RecordPacket(nil) {
 		t.Fatal("nil IP should never trigger")
 	}
+	h.RecordCompletion(nil) // should not panic
 }
 
 func TestHandshakeTracker_CompletionResetsCount(t *testing.T) {
