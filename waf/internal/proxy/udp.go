@@ -166,9 +166,15 @@ func (u *UDPProxy) inspectAndForward(srcAddr *net.UDPAddr, payload []byte, upstr
 			case detect.ModeBlock:
 				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
 				log.Printf("[UDP] Drop geo-velocity: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Drop geo-velocity: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 				return
 			case detect.ModeMonitor:
 				log.Printf("[UDP] Monitor geo-velocity: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Monitor geo-velocity: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 			}
 		}
 	}
@@ -181,9 +187,15 @@ func (u *UDPProxy) inspectAndForward(srcAddr *net.UDPAddr, payload []byte, upstr
 			case detect.ModeBlock:
 				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
 				log.Printf("[UDP] Drop reconnect storm: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Drop reconnect storm: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 				return
 			case detect.ModeMonitor:
 				log.Printf("[UDP] Monitor reconnect storm: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Monitor reconnect storm: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 			}
 		}
 	}
@@ -196,9 +208,15 @@ func (u *UDPProxy) inspectAndForward(srcAddr *net.UDPAddr, payload []byte, upstr
 			case detect.ModeBlock:
 				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
 				log.Printf("[UDP] Drop incomplete handshake flood: IP=%s", srcIP.String())
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Drop incomplete handshake flood: IP=%s", srcIP.String()))
+				}
 				return
 			case detect.ModeMonitor:
 				log.Printf("[UDP] Monitor incomplete handshake flood: IP=%s", srcIP.String())
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Monitor incomplete handshake flood: IP=%s", srcIP.String()))
+				}
 			}
 		}
 	}
@@ -211,9 +229,15 @@ func (u *UDPProxy) inspectAndForward(srcAddr *net.UDPAddr, payload []byte, upstr
 			case detect.ModeBlock:
 				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
 				log.Printf("[UDP] Drop high-entropy payload: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Drop high-entropy payload: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 				return
 			case detect.ModeMonitor:
 				log.Printf("[UDP] Monitor high-entropy payload: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Monitor high-entropy payload: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 			}
 		}
 	}
@@ -226,9 +250,15 @@ func (u *UDPProxy) inspectAndForward(srcAddr *net.UDPAddr, payload []byte, upstr
 			case detect.ModeBlock:
 				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
 				log.Printf("[UDP] Drop IP churn: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Drop IP churn: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 				return
 			case detect.ModeMonitor:
 				log.Printf("[UDP] Monitor IP churn: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Monitor IP churn: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 			}
 		}
 	}
@@ -241,9 +271,15 @@ func (u *UDPProxy) inspectAndForward(srcAddr *net.UDPAddr, payload []byte, upstr
 			case detect.ModeBlock:
 				metrics.PacketsTotal.WithLabelValues(portStr, "drop").Inc()
 				log.Printf("[UDP] Drop packet burst: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Drop packet burst: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 				return
 			case detect.ModeMonitor:
 				log.Printf("[UDP] Monitor packet burst: IP=%s SteamID=%d", srcIP.String(), steamID)
+				if n := u.pipeline.Notifier; n != nil {
+					n.Notify(fmt.Sprintf("Monitor packet burst: IP=%s SteamID=%d", srcIP.String(), steamID))
+				}
 			}
 		}
 	}

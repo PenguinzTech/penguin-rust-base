@@ -18,6 +18,7 @@ import (
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/detect"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/metrics"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/proxy"
+	"github.com/penguintechinc/penguin-rust-base/waf/internal/rcon"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/rules"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/state"
 )
@@ -135,12 +136,17 @@ func main() {
 		}
 	}
 
-	// Suppress unused warnings for RCON notifier vars (used in Task 12)
-	_ = rconNotifyEnabled
-	_ = rconNotifyPassword
-
 	// Create rules engine
 	rulesEngine := rules.NewEngine()
+
+	// Create RCON notifier if enabled
+	var rconNotifier *rcon.Notifier
+	if rconNotifyEnabled {
+		rconNotifier = rcon.NewNotifier("ws://127.0.0.1:"+rconUpstreamPort, rconNotifyPassword, 64)
+		rconNotifier.Start()
+		defer rconNotifier.Stop()
+		log.Printf("[WAF] RCON notifier enabled -> ws://127.0.0.1:%s", rconUpstreamPort)
+	}
 
 	// Create pipeline
 	pipeline := &proxy.Pipeline{
@@ -157,6 +163,7 @@ func main() {
 		Burst:     burst,
 		Amplify:   amplify,
 		GeoVel:    geoVel,
+		Notifier:  rconNotifier,
 	}
 
 	// Create API server

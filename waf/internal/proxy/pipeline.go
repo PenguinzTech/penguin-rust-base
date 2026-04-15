@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/detect"
+	"github.com/penguintechinc/penguin-rust-base/waf/internal/rcon"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/rules"
 	"github.com/penguintechinc/penguin-rust-base/waf/internal/state"
 )
@@ -21,4 +22,5 @@ type Pipeline struct {
 	Burst     *detect.BurstDetector
 	Amplify   *detect.AmplificationGuard
 	GeoVel    *detect.GeoVelocityDetector
+	Notifier  *rcon.Notifier
 }
