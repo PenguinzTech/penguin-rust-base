@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -201,7 +202,7 @@ func TestAllowPacketSteamIDLimitExceeded(t *testing.T) {
 
 	// Consume SteamID budget (not IP, so use different IP)
 	for i := 0; i < 3; i++ {
-		testIP := net.ParseIP("192.168.1." + string(rune(i+10)))
+		testIP := net.ParseIP(fmt.Sprintf("192.168.1.%d", i+10))
 		if !limiter.AllowPacket(testIP, steamID) {
 			t.Errorf("AllowPacket() packet %d should be allowed", i+1)
 		}
