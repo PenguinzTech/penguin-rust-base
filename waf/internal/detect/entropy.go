@@ -39,20 +39,16 @@ func (e *EntropyDetector) Analyze(payload []byte) bool {
 // Formula: H = -sum(p * log2(p)) for each byte value (0-255) where p = count/len(payload)
 // Only includes byte values that actually appear.
 func (e *EntropyDetector) calculateEntropy(payload []byte) float64 {
-	if len(payload) == 0 {
-		return 0
-	}
-
-	// Count frequency of each byte value
-	freqMap := make(map[byte]int)
+	// Count frequency of each byte value using fixed array (no heap allocation)
+	var freq [256]int
 	for _, b := range payload {
-		freqMap[b]++
+		freq[b]++
 	}
 
 	// Calculate Shannon entropy
 	var entropy float64
 	length := float64(len(payload))
-	for _, count := range freqMap {
+	for _, count := range freq[:] {
 		if count > 0 {
 			p := float64(count) / length
 			entropy -= p * math.Log2(p)
