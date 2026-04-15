@@ -97,7 +97,12 @@ func (s *Store) IsIPBlocked(ip net.IP) bool {
 
 // BlockSteamID adds steamID to the blocked set. Zero duration means permanent.
 // If steamID is marked as priority, this is a no-op.
+// Zero steamID is never blocked (invalid steamID).
 func (s *Store) BlockSteamID(id uint64, duration time.Duration, reason string) {
+	if id == 0 {
+		return
+	}
+
 	// Check if this SteamID is priority; if so, do nothing
 	if s.IsPriority(id) {
 		return
@@ -118,7 +123,12 @@ func (s *Store) UnblockSteamID(id uint64) {
 
 // IsSteamIDBlocked returns true if steamID is in the blocked set and not expired.
 // Stale entries are deleted during the check.
+// Zero steamID is never blocked (invalid steamID).
 func (s *Store) IsSteamIDBlocked(id uint64) bool {
+	if id == 0 {
+		return false
+	}
+
 	val, ok := s.blockedSteamIDs.Load(id)
 	if !ok {
 		return false
