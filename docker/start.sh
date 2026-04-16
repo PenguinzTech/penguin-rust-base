@@ -260,11 +260,25 @@ PLUGINS_REPO="PenguinzTech/penguin-rust-plugins"
 GITHUB_API="https://api.github.com/repos/${PLUGINS_REPO}"
 
 # _activate_baked_slug slug
-# Gunzips (or copies) the baked .cs from disabled/ into oxide/plugins/.
-# Returns 0 on success, 1 if no .cs found.
+# Activates a baked plugin from patched/ (preferred) or disabled/ cache.
+# patched/ holds pre-patched .cs files; disabled/ holds compressed .cs.gz.
+# Returns 0 on success, 1 if no .cs found in either location.
 _activate_baked_slug() {
     local slug="$1"
     local cs_name
+
+    # 1. patched/ — pre-patched .cs files take priority over disabled/ cache
+    local patched_file
+    patched_file=$(find "${OXIDE_PLUGINS_DIR}/patched" -maxdepth 1 -iname "${slug}*.cs" \
+        2>/dev/null | head -1 || true)
+    if [ -n "${patched_file}" ]; then
+        cs_name=$(basename "${patched_file}")
+        cp --preserve=mode "${patched_file}" "${OXIDE_PLUGINS_DIR}/${cs_name}"
+        echo "[startup] activated (patched): ${cs_name}"
+        return 0
+    fi
+
+    # 2. disabled/ — baked compressed copy
     cs_name=$(find "${OXIDE_PLUGINS_DIR}/disabled" -maxdepth 1 -name "${slug}*.cs.gz" \
         -exec basename {} .gz \; 2>/dev/null | head -1 || true)
     # Fallback: derive from per-plugin dir if disabled/ was cleared externally
@@ -281,7 +295,7 @@ _activate_baked_slug() {
     else
         cp --preserve=mode "${PER_PLUGIN_DIR}/${slug}/${cs_name}" "${OXIDE_PLUGINS_DIR}/"
     fi
-    cp "${OXIDE_PLUGINS_DIR}/disabled/${slug}.hash" "${OXIDE_PLUGINS_DIR}/"
+    cp "${OXIDE_PLUGINS_DIR}/disabled/${slug}.hash" "${OXIDE_PLUGINS_DIR}/" 2>/dev/null || true
     echo "[startup] activated: ${cs_name}"
     return 0
 }
@@ -453,20 +467,35 @@ if [ "${OXIDE:-1}" != "0" ]; then
         SLUGS=$(echo "${RUST_PLUGINS}" | tr ',' ' ' | tr -s ' ')
         echo "[startup] RUST_PLUGINS: ${SLUGS}"
 
-        # Fetch all release tags once (github and baked modes may need them for update checks).
+        # Fetch all release tags once up-front (serial — one API call shared by all slugs).
         _ALL_TAGS=""
         if [ "${PLUGIN_SOURCE}" = "github" ]; then
             _ALL_TAGS=$(curl -sf "${GITHUB_API}/releases?per_page=100" \
                 | jq -r '.[].tag_name' 2>/dev/null || true)
         fi
 
+        # Activate all plugins in parallel — each slug forks a subshell.
+        # Results are written to per-slug status files so the parent can tally
+        # counts after wait without races on shared variables.
+        _PLUGIN_TMP="$(mktemp -d)"
+        export _ALL_TAGS _PLUGIN_TMP
+
         for slug in ${SLUGS}; do
             [ -z "${slug}" ] && continue
-            if activate_plugin "${slug}"; then
-                ACTIVATED_COUNT=$((ACTIVATED_COUNT + 1))
-                [ "${PLUGIN_SOURCE}" = "umod" ] && UMOD_COUNT=$((UMOD_COUNT + 1))
-            fi
+            (
+                if activate_plugin "${slug}"; then
+                    touch "${_PLUGIN_TMP}/ok_${slug}"
+                    [ "${PLUGIN_SOURCE}" = "umod" ] && touch "${_PLUGIN_TMP}/umod_${slug}"
+                else
+                    touch "${_PLUGIN_TMP}/fail_${slug}"
+                fi
+            ) &
         done
+        wait
+
+        ACTIVATED_COUNT=$(find "${_PLUGIN_TMP}" -name 'ok_*' | wc -l)
+        UMOD_COUNT=$(find "${_PLUGIN_TMP}" -name 'umod_*' | wc -l)
+        rm -rf "${_PLUGIN_TMP}"
 
         if [ "${UMOD_COUNT}" -gt 0 ]; then
             echo "[startup] Plugin provisioning complete: ${ACTIVATED_COUNT} activated, ${UMOD_COUNT} umod (UNSCANNED)" >&2
