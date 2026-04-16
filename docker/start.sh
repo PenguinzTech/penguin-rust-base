@@ -595,10 +595,19 @@ if [ -f /etc/rust-build-info ]; then
     . /etc/rust-build-info
 fi
 
+# ─── Seed resolution ─────────────────────────────────────────────────────────
+# Generate a random 5-digit seed once if not explicitly set, so every server
+# gets a unique map by default rather than everyone sharing 12345.
+if [ -z "${RUST_SERVER_SEED:-}" ]; then
+    RUST_SERVER_SEED=$(( (RANDOM * 32768 + RANDOM) % 90000 + 10000 ))
+    echo "[startup] RUST_SERVER_SEED not set — generated random seed: ${RUST_SERVER_SEED}"
+fi
+export RUST_SERVER_SEED
+
 # ─── Startup log ─────────────────────────────────────────────────────────────
 echo "[startup] Rust dedicated server starting..."
 echo "[startup] Oxide: ${OXIDE_VERSION:-unknown} | Steam build: ${STEAM_BUILD_ID:-unknown}"
-echo "[startup] World: ${RUST_SERVER_WORLDSIZE:-3000} | Seed: ${RUST_SERVER_SEED:-12345}"
+echo "[startup] World: ${RUST_SERVER_WORLDSIZE:-3000} | Seed: ${RUST_SERVER_SEED}"
 echo "[startup] MONO_GC_PARAMS: ${MONO_GC_PARAMS}"
 
 # ─── Launch server ───────────────────────────────────────────────────────────
@@ -611,7 +620,7 @@ SERVER_ARGS=(
     +server.port      "${RUST_SERVER_PORT:-28015}"
     +server.maxplayers "${RUST_SERVER_MAXPLAYERS:-50}"
     +server.worldsize "${RUST_SERVER_WORLDSIZE:-3000}"
-    +server.seed      "${RUST_SERVER_SEED:-12345}"
+    +server.seed      "${RUST_SERVER_SEED}"
     +server.saveinterval "${RUST_SERVER_SAVE_INTERVAL:-300}"
     +server.identity  "${RUST_SERVER_IDENTITY:-rust_server}"
     +server.level     "${RUST_SERVER_LEVEL:-Procedural Map}"
