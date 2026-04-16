@@ -12,7 +12,7 @@ using UnityEngine;
 // ToDo: ZLevels integration (waiting for ZLevels api implementation)
 // ToDo: Add Cooldown option for Delivery
 
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID->FindAwakeOrSleeping)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID->FindAwakeOrSleeping); converted ulong to string for FindAwakeOrSleeping call (line 348)
 namespace Oxide.Plugins
 {
     [Info("Quests", "Gonzi", "2.4.4")]
@@ -345,7 +345,7 @@ namespace Oxide.Plugins
                 if (info.InitiatorPlayer != null)
                     player = info.InitiatorPlayer;
                 else if (entity.GetComponent<PatrolHelicopter>() != null)
-                    player = BasePlayer.FindAwakeOrSleeping(GetLastAttacker(entity.net.ID));
+                    player = BasePlayer.FindAwakeOrSleeping(GetLastAttacker(entity.net.ID).ToString());
 
                 if (player != null)
                 {

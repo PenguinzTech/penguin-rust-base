@@ -218,6 +218,19 @@ RUN set -eu; \
     find /etc/penguin-rust-plugins/per-plugin -maxdepth 2 -name '*.hash' \
         -exec cp {} /steamcmd/rust/oxide/plugins/disabled/ \;
 
+# ─── Deconflict staged plugins ───────────────────────────────────────────────
+# Some slugs define C# classes that conflict with our patched versions.
+# Remove conflicting staged plugins from disabled/ so only patched versions load.
+# Conflicts:
+#   - vehiclelicense slug → VehicleLicense.cs.gz (conflicts with patched VehicleLicence.cs)
+#   - treeplanter slug → treeplanter.cs.gz (conflicts with patched TreePlanter.cs)
+#   - rustkits slug → RustKits.cs.gz (conflicts with patched Kits.cs)
+# Use -f to avoid failure if files don't exist (penguin-rust-plugins may not publish all).
+RUN rm -f \
+    /steamcmd/rust/oxide/plugins/disabled/VehicleLicense.cs.gz \
+    /steamcmd/rust/oxide/plugins/disabled/treeplanter.cs.gz \
+    /steamcmd/rust/oxide/plugins/disabled/RustKits.cs.gz
+
 # ─── Built-in plugins ────────────────────────────────────────────────────────
 # AutoAdmin is baked into the base image so every downstream image gets
 # automatic permission provisioning and admin group management.

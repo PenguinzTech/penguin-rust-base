@@ -1,9 +1,10 @@
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, ConVar.Chat.ChatChannel→Chat.ChatChannel)
+// PATCHED by penguin-rust-base: added missing 'using Rust;' directive for Chat.ChatChannel type resolution
 
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
+using Rust;
 using System;
 using System.Collections.Generic;
 using System.Linq;

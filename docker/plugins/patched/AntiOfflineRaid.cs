@@ -12,7 +12,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, BuildingPrivlidge→BuildingPrivilege)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, BuildingPrivlidge→BuildingPrivilege); fixed operator precedence in null-coalescing expression (line 361)
 
 //AntiOfflineRaid created with PluginMerge v(1.0.6.0) by MJSU @ https://github.com/dassjosh/Plugin.Merge
 namespace Oxide.Plugins
@@ -358,7 +358,7 @@ namespace Oxide.Plugins
         [ChatCommand("ao")]
         void CheckOfflineStatus(BasePlayer player, string command, string[] args)
         {
-            if (!HasPerm(player, PluginPermissions.Check) && player.net?.connection?.authLevel ?? 0 < 1)
+            if (!HasPerm(player, PluginPermissions.Check) && (player.net?.connection?.authLevel ?? 0) < 1)
             {
                 SendReply(player, GetMsg("Denied: Permission", player.UserIDString));
                 return;

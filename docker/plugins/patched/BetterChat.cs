@@ -1,4 +1,4 @@
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, ConVar.Chat.ChatChannel→Chat.ChatChannel)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, ConVar.Chat.ChatChannel→Chat.ChatChannel) + ulong→string conversion in FindAwakeOrSleeping call (line 202)
 
 using Oxide.Plugins.BetterChatExtensions;
 using Oxide.Core.Libraries.Covalence;
@@ -199,7 +199,7 @@ namespace Oxide.Plugins
                     {
                         if (playerData.HasUser)
                         {
-                            list.Add(BasePlayer.FindAwakeOrSleeping(playerData.UserID)?.Connection);
+                            list.Add(BasePlayer.FindAwakeOrSleeping(playerData.UserID.ToString())?.Connection);
                         }
                     }
 

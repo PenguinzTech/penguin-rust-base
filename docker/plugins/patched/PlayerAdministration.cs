@@ -1,4 +1,4 @@
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection); converted ulong to string for FindAwakeOrSleeping/FindSleeping calls
 /* --- Contributor information ---
  * Please follow the following set of guidelines when working on this plugin,
  * this to help others understand this file more easily.
@@ -697,7 +697,7 @@ namespace Oxide.Plugins
         /// <param name="aPermission">Pass <see cref="string.Empty"/> to only verify <see cref="CPermUiShow"/></param>
         /// <returns></returns>
         private bool VerifyPermission(ulong aPlayerId, string aPermission) {
-            BasePlayer player = BasePlayer.FindAwakeOrSleeping(aPlayerId);
+            BasePlayer player = BasePlayer.FindAwakeOrSleeping(aPlayerId.ToString());
             return VerifyPermission(ref player, aPermission);
         }
 
@@ -1494,7 +1494,7 @@ namespace Oxide.Plugins
             LogDebug("BuildUserPage > Title lables have been added.");
 
             if (aPageType == UiPage.PlayerPage) {
-                BasePlayer player = BasePlayer.FindAwakeOrSleeping(aPlayerId) ?? BasePlayer.FindSleeping(aPlayerId);
+                BasePlayer player = BasePlayer.FindAwakeOrSleeping(aPlayerId.ToString()) ?? BasePlayer.FindSleeping(aPlayerId.ToString());
                 bool isPlayerNull = player == null;
                 bool isPlayerConnected = false;
 
@@ -3042,7 +3042,7 @@ namespace Oxide.Plugins
             if (!GetTargetFromArg(aArgs, out targetId))
                 return;
 
-            BasePlayer targetPlayer = BasePlayer.FindAwakeOrSleeping(targetId);
+            BasePlayer targetPlayer = BasePlayer.FindAwakeOrSleeping(targetId.ToString());
 
             if (aPlayer.IsServer) {
                 if (permission.UserHasPermission(targetId.ToString(), CPermProtectKick)) {
@@ -3085,7 +3085,7 @@ namespace Oxide.Plugins
                 return;
 
             if (aPlayer.IsServer) {
-                BasePlayer target = BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId);
+                BasePlayer target = BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString());
 
                 if (BetterChatMute != null && target != null) {
                     BetterChatMute.Call("API_Unmute", target.IPlayer, aPlayer);
@@ -3100,7 +3100,7 @@ namespace Oxide.Plugins
                 if (!VerifyPermission(ref player, CPermMute, true))
                     return;
 
-                BasePlayer target = BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId);
+                BasePlayer target = BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString());
 
                 if (BetterChatMute != null && target != null) {
                     BetterChatMute.Call("API_Unmute", target.IPlayer, aPlayer);
@@ -3123,7 +3123,7 @@ namespace Oxide.Plugins
                 return;
 
             if (aPlayer.IsServer) {
-                BasePlayer target = BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId);
+                BasePlayer target = BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString());
 
                 if (BetterChatMute != null && target != null) {
                     if (time.Equals(0f)) {
@@ -3142,7 +3142,7 @@ namespace Oxide.Plugins
                 if (!VerifyPermission(ref player, CPermMute, true))
                     return;
 
-                BasePlayer target = BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId);
+                BasePlayer target = BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString());
 
                 if (BetterChatMute != null && target != null) {
                     string inputReason = GetReason(player.userID, targetId.ToString());
@@ -3281,7 +3281,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.inventory.Strip();
+                (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.inventory.Strip();
                 LogInfo($"{aPlayer.Name}: Cleared the inventory of user ID {targetId}");
             } else {
                 BasePlayer player = BasePlayer.Find(aPlayer.Id);
@@ -3294,7 +3294,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.inventory.Strip();
+                (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.inventory.Strip();
                 LogInfo($"{player.displayName}: Cleared the inventory of user ID {targetId}");
                 timer.Once(0.01f, () => BuildUI(player, UiPage.PlayerPage, targetId.ToString()));
             }

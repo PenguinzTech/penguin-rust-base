@@ -1,4 +1,4 @@
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection) + ulong→string conversion (line 3459) + removed .Get() on userID (lines 535, 3620)
 ﻿//Requires: ZoneManager
 
 using System;
@@ -532,7 +532,7 @@ public class DynamicPVP : RustPlugin
   private bool TryRemovePVPDelay(BasePlayer player)
   {
     PrintDebug($"TryRemovePVPDelay(): Removing {player.displayName} from PVP delay");
-    var playerId = player.userID.Get();
+    var playerId = player.userID;
     if (!_pvpDelays.Remove(playerId, out var leftZone)) return false;
     Interface.CallHook("OnPlayerRemovedFromPVPDelay",
       playerId, leftZone.zoneId, player);
@@ -3456,7 +3456,7 @@ public class DynamicPVP : RustPlugin
     }
     var attacker = info.InitiatorPlayer ??
      (info.Initiator && info.Initiator.OwnerID.IsSteamId() ?
-       BasePlayer.FindAwakeOrSleeping(info.Initiator.OwnerID) : null);
+       BasePlayer.FindAwakeOrSleeping(info.Initiator.OwnerID.ToString()) : null);
     if (attacker is null || !attacker || !attacker.userID.IsSteamId())
     {
       //The attacker cannot be fully captured
@@ -3617,7 +3617,7 @@ public class DynamicPVP : RustPlugin
     var leftZone = GetOrAddPVPDelay(player, zoneId, baseEvent);
     leftZone.zoneTimer =
       timer.Once(baseEvent.PvpDelayTime, () => { TryRemovePVPDelay(player); });
-    var playerID = player.userID.Get();
+    var playerID = player.userID;
     Interface.CallHook("OnPlayerAddedToPVPDelay",
       playerID, zoneId, baseEvent.PvpDelayTime, player);
     // also notify TruePVE if we're using its API to implement the delay
