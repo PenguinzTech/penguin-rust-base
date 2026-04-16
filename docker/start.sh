@@ -671,6 +671,12 @@ fi
 # Requires RUST_RCON_PASSWORD. Interval: RUST_MAXPLAYERS_CHECK_INTERVAL
 # (default 1800s / 30 min). Set to 0 to disable.
 _MP_INTERVAL="${RUST_MAXPLAYERS_CHECK_INTERVAL:-1800}"
+# Skip periodic adjustment when operator has explicitly set maxPlayers or
+# worldSize — they've opted out of auto-config, so don't override their values.
+if [ -n "${RUST_SERVER_MAXPLAYERS:-}" ] || [ -n "${RUST_SERVER_WORLDSIZE:-}" ]; then
+    _MP_INTERVAL=0
+    echo "[autoconfig] RUST_SERVER_MAXPLAYERS or RUST_SERVER_WORLDSIZE explicitly set — periodic maxPlayers adjustment disabled"
+fi
 if [ -n "${RUST_RCON_PASSWORD:-}" ] && [ "${_MP_INTERVAL}" -gt 0 ]; then
     (
         # Wait for the game port to open (world gen complete)
