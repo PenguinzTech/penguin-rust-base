@@ -235,8 +235,34 @@ Pass comma-separated Steam IDs to automatically grant admin access on every cont
 
 **What happens on each boot:**
 1. Steam IDs are written to `server/<identity>/cfg/users.cfg` as `ownerid` entries
-2. **AutoAdmin.cs** grants all Oxide plugin permissions for each ID (except `vanish.permanent`)
+2. **AutoAdmin.cs** adds each ID to the Oxide `admin` group and grants all permissions for every baked and patched plugin automatically (see below)
 3. Removed IDs are automatically revoked (the file is rewritten clean on each boot)
+
+**Permissions auto-granted to the `admin` group:**
+
+| Plugin | Key permissions |
+|---|---|
+| AdminUtilities | noclip, god mode, kick/ban, give, spawn |
+| BGrade | all grade tiers (`bgrade.1`–`4`, `bgrade.all`) |
+| CopyPaste | copy, paste, undo |
+| Vanish | allow, unlock, damage, teleport (`vanish.permanent` intentionally excluded) |
+| TruePVE | `truepve.canmap` |
+| RemoverTool | all `removertool.*` permissions |
+| VehicleDecayProtection | all `vehicledecayprotection.*` permissions |
+| NightLantern | all `nightlantern.*` permissions |
+| StackSizeController | all `stacksizecontroller.*` permissions |
+| Whitelist | `whitelist.allow` |
+| AntiOfflineRaid | protect, check |
+| BetterChatMute | `betterchatmute.permanent` |
+| DynamicPVP | `dynamicpvp.admin` |
+| NTeleportation | all 19 teleport permissions (home, tp, tpr, admin, bypass flags, etc.) |
+| PlayerAdministration | all access + protect permissions (open GUI with `/padmin`) |
+| Quests | manage, use |
+| TreePlanter | use, menu |
+| VehicleLicence | all `vehiclelicence.*` permissions (including per-vehicle-type perms from config) |
+| ZoneManager | all `zonemanager.*` permissions (zone + dynamic per-flag ignore perms) |
+
+Permissions are also re-granted via `OnPluginLoaded` whenever a plugin hot-reloads or is added via `/plugin add`, so admins never need manual `oxide.grant` calls for the plugins listed above.
 
 **Finding your Steam ID:**
 - Visit [steamid.io](https://steamid.io) or [SteamIDFinder](https://www.steamidfinder.com/)

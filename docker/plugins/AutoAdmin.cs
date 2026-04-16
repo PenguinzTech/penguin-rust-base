@@ -67,6 +67,47 @@ namespace Oxide.Plugins
                 "waterbases.vip4", "waterbases.vip5",
             },
             ["Whitelist"] = new[] { "whitelist.allow" },
+
+            // ── Patched community plugins ────────────────────────────────────
+            ["AntiOfflineRaid"] = new[]
+            {
+                "antiofflineraid.protect", "antiofflineraid.check",
+            },
+            ["BetterChatMute"] = new[]
+            {
+                "betterchatmute.permanent",
+            },
+            ["DynamicPVP"] = new[] { "dynamicpvp.admin" },
+            ["NTeleportation"] = new[]
+            {
+                "nteleportation.admin",       "nteleportation.home",
+                "nteleportation.deletehome",  "nteleportation.homehomes",
+                "nteleportation.importhomes", "nteleportation.radiushome",
+                "nteleportation.tpr",         "nteleportation.tp",
+                "nteleportation.disallowtptome", "nteleportation.tpb",
+                "nteleportation.bypassfoundationcheck",
+                "nteleportation.nocosts",            "nteleportation.blocktpmarker",
+                "nteleportation.skipwipewaittime",   "nteleportation.locationradiusbypass",
+                "nteleportation.ignoreglobalcooldown","nteleportation.norestrictions",
+                "nteleportation.globalcooldownvip",  "nteleportation.tugboatsinterruptbypass",
+                "nteleportation.tugboatssethomebypass",
+            },
+            ["PlayerAdministration"] = new[]
+            {
+                "playeradministration.access.show",             "playeradministration.access.kick",
+                "playeradministration.access.ban",              "playeradministration.access.kill",
+                "playeradministration.access.perms",            "playeradministration.access.mute",
+                "playeradministration.access.allowfreeze",      "playeradministration.access.clearinventory",
+                "playeradministration.access.resetblueprint",   "playeradministration.access.resetmetabolism",
+                "playeradministration.access.recovermetabolism","playeradministration.access.hurt",
+                "playeradministration.access.heal",             "playeradministration.access.teleport",
+                "playeradministration.access.spectate",         "playeradministration.access.detailedinfo",
+                "playeradministration.protect.ban",             "playeradministration.protect.hurt",
+                "playeradministration.protect.kick",            "playeradministration.protect.kill",
+                "playeradministration.protect.reset",
+            },
+            ["Quests"] = new[] { "quests.manage", "quests.use" },
+            ["TreePlanter"] = new[] { "treeplanter.use", "treeplanter.menu" },
         };
 
         // Plugins whose permissions are generated at runtime from config files
@@ -79,11 +120,16 @@ namespace Oxide.Plugins
             ["VehicleDecayProtection"] = "vehicledecayprotection.",
             ["NightLantern"]           = "nightlantern.",
             ["StackSizeController"]    = "stacksizecontroller.",
+            // VehicleLicence registers per-vehicle permissions dynamically from config —
+            // use prefix so any vehicle type added to config is automatically covered.
+            ["VehicleLicence"]         = "vehiclelicence.",
             ["Biplane"]                = "biplane.",
             ["Kits"]                   = "kits.",
             ["PersonalAnimal"]         = "personalanimal.",
             ["XDQuest"]                = "xdquest.",
             ["DeployableZipline"]      = "deployablezipline.",
+            // ZoneManager registers per-flag ignore permissions dynamically at startup.
+            ["ZoneManager"]            = "zonemanager.",
         };
 
         void OnServerInitialized()

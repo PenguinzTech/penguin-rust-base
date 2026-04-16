@@ -29,7 +29,7 @@ Perfect for operators, communities, and teams extending with proprietary plugins
   - **TruePVE** — PvE protection rules
   - **StackSizeController** — Customize item stack sizes
   - **Whitelist** — Restrict server access to whitelisted players
-- **AutoAdmin Plugin** — Custom PenguinzTech plugin that auto-provisions Oxide permissions from environment variables
+- **AutoAdmin Plugin** — Custom PenguinzTech plugin that auto-grants all baked and patched plugin permissions to admins on every boot via `RUST_ADMIN_STEAMIDS`; also fires on plugin hot-reload so no manual `oxide.grant` calls are needed
 - **PluginManager Plugin** — Runtime `/plugin add|remove|update|list` commands; manage plugins live without a restart (see [docs/plugin-manager.md](docs/plugin-manager.md))
 - **Patched Community Plugins** — 10 popular community plugins pre-patched for Oxide API compatibility (removed APIs replaced so they work on current Rust builds): AntiOfflineRaid, BetterChat, BetterChatMute, DynamicPVP, NTeleportation, PlayerAdministration, Quests, TreePlanter, VehicleLicence, ZoneManager — see [docs/ACKNOWLEDGEMENTS.md](docs/ACKNOWLEDGEMENTS.md)
 - **WAF Sidecar** — Go-based network-layer firewall that protects the game server from DDoS floods, cheater reconnect storms, RCON brute-force, and packet anomalies — **works in pure vanilla mode** with no Oxide required (see [docs/waf.md](docs/waf.md))
