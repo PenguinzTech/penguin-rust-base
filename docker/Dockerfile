@@ -243,6 +243,7 @@ RUN rm -f \
 # instead so servers get working patched versions. Oxide only scans oxide/plugins/
 # root — subdirectories are ignored, so patched plugins are copied to root.
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
+COPY --chown=rustserver:rustserver plugins/AdminSync.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/PluginManager.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/patched/ /steamcmd/rust/oxide/plugins/
 
