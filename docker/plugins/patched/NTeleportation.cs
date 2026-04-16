@@ -220,7 +220,7 @@ namespace Oxide.Plugins
             return safeZones.Exists(zone => (zone.position - a).sqrMagnitude <= zone.sqrDistance);
         }
 
-        public bool IsAuthed(BasePlayer player, BuildingPrivilege priv) => (priv.OwnerID == player.userID && config.Home.UsableIntoBuildingBlocked) || config.Home.UsableIntoBuildingBlocked || priv.IsAuthed(player);
+        public bool IsAuthed(BasePlayer player, PrivilegeTool priv) => (priv.OwnerID == player.userID && config.Home.UsableIntoBuildingBlocked) || config.Home.UsableIntoBuildingBlocked || priv.IsAuthed(player);
 
         private List<ulong> delayedTeleports = new List<ulong>();
 

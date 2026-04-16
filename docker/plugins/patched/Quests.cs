@@ -345,7 +345,7 @@ namespace Oxide.Plugins
                 if (info.InitiatorPlayer != null)
                     player = info.InitiatorPlayer;
                 else if (entity.GetComponent<PatrolHelicopter>() != null)
-                    player = BasePlayer.FindAwakeOrSleeping(GetLastAttacker(entity.net.ID).ToString());
+                    player = BasePlayer.FindAwakeOrSleeping(GetLastAttacker(entity.net.ID));
 
                 if (player != null)
                 {

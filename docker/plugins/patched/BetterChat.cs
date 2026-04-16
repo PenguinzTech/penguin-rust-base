@@ -90,7 +90,7 @@ namespace Oxide.Plugins
         }
 
 #if RUST
-        private object OnPlayerChat(BasePlayer bplayer, string message, Chat.ChatChannel chatchannel)
+        private object OnPlayerChat(BasePlayer bplayer, string message, int chatchannel)
         {
             IPlayer player = bplayer.IPlayer;
 #else
@@ -126,7 +126,7 @@ namespace Oxide.Plugins
         #region Messaging
 
 #if RUST
-        private BetterChatMessage.CancelOptions SendBetterChatMessage(BetterChatMessage chatMessage, Chat.ChatChannel chatchannel)
+        private BetterChatMessage.CancelOptions SendBetterChatMessage(BetterChatMessage chatMessage, int chatchannel)
 #else
         private BetterChatMessage.CancelOptions SendBetterChatMessage(BetterChatMessage chatMessage)
 #endif
@@ -169,14 +169,14 @@ namespace Oxide.Plugins
 
             switch (chatchannel)
             {
-                case Chat.ChatChannel.Team:
+                case 1: // Chat.ChatChannel.Team
                     RelationshipManager.PlayerTeam team = basePlayer.Team;
                     if (team == null || team.members.Count == 0)
                     {
                         throw new InvalidOperationException("Chat channel is set to Team, however the player is not in a team.");
                     }
 
-                    team.BroadcastTeamChat(basePlayer.userID, chatMessage.Player.Name, chatMessage.Message, chatMessage.UsernameSettings.Color);
+                    team.BroadcastTeamChat(basePlayer.UserIDString, chatMessage.Player.Name, chatMessage.Message, chatMessage.UsernameSettings.Color);
 
                     List<Network.Connection> onlineMemberConnections = team.GetOnlineMemberConnections();
                     if (onlineMemberConnections != null)
@@ -185,7 +185,7 @@ namespace Oxide.Plugins
                     }
                     break;
 
-                case Chat.ChatChannel.Cards:
+                case 3: // Chat.ChatChannel.Cards
                     BaseCardGameEntity baseCardGame = basePlayer.GetMountedVehicle() as BaseCardGameEntity;
 
                     if (baseCardGame == null /* || !cardTable.GameController.PlayerIsInGame(basePlayer) */)
@@ -211,7 +211,7 @@ namespace Oxide.Plugins
                     Facepunch.Pool.FreeUnmanaged(ref list);
                     break;
 
-                case Chat.ChatChannel.Clan:
+                case 4: // Chat.ChatChannel.Clan
                     long clanid = basePlayer.clanId;
 
                     if (clanid == 0)
@@ -238,8 +238,8 @@ namespace Oxide.Plugins
                     Facepunch.Pool.FreeUnmanaged(ref clanlist);
                     break;
 
-                case Chat.ChatChannel.Local: 
-                    float localRange = Chat.localChatRange * Chat.localChatRange;
+                case 5: // Chat.ChatChannel.Local
+                    float localRange = 20f * 20f; // Chat.localChatRange was removed in Oxide 2.x; default is 20
                     foreach (BasePlayer player in BasePlayer.activePlayerList)
                     {
                         if (chatMessage.BlockedReceivers.Contains(player.UserIDString))
@@ -268,6 +268,8 @@ namespace Oxide.Plugins
 #if RUST
             Puts($"[{chatchannel}] {output.Console}");
 
+            // Chat.ChatEntry and Chat.Record removed in Oxide 2.x / current Rust
+            /*
             var chatEntry = new Chat.ChatEntry
             {
                 Channel = chatchannel,
@@ -279,6 +281,7 @@ namespace Oxide.Plugins
             };
 
             Chat.Record(chatEntry);
+            */
 #else
             Puts(output.Console);
 #endif

@@ -696,8 +696,8 @@ namespace Oxide.Plugins
         /// <param name="aPlayerId">The player's ID</param>
         /// <param name="aPermission">Pass <see cref="string.Empty"/> to only verify <see cref="CPermUiShow"/></param>
         /// <returns></returns>
-        private bool VerifyPermission(ulong aPlayerId, string aPermission) {
-            BasePlayer player = BasePlayer.FindAwakeOrSleeping(aPlayerId.ToString());
+        private bool VerifyPermission(string aPlayerId, string aPermission) {
+            BasePlayer player = BasePlayer.FindAwakeOrSleeping(aPlayerId);
             return VerifyPermission(ref player, aPermission);
         }
 

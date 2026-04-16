@@ -79,10 +79,10 @@ namespace Oxide.Plugins
         }
 
 #if RUST
-        private object OnPlayerChat(BasePlayer bplayer, string message, Chat.ChatChannel chatChannel)
+        private object OnPlayerChat(BasePlayer bplayer, string message, int chatChannel)
         {
             IPlayer player = bplayer.IPlayer;
-            bool isPublicMessage = chatChannel == Chat.ChatChannel.Global;
+            bool isPublicMessage = chatChannel == 0;
 #else
         private object OnUserChat(IPlayer player, string message)
         {

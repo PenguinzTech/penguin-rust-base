@@ -375,14 +375,14 @@ namespace Oxide.Plugins
                 item.amount += amount;
         }
                
-        private object OnPlayerChat(BasePlayer player, string message, Chat.ChatChannel channel)
+        private object OnPlayerChat(BasePlayer player, string message, int channel)
         {
             if (!player)
                 return null;
 
-            if (!HasPlayerFlag(player, ZoneFlags.NoChat)) 
+            if (!HasPlayerFlag(player, ZoneFlags.NoChat))
                 return null;
-            
+
             SendMessage(player, Message("noChat", player.UserIDString));
             return true;
         }

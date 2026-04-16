@@ -33,8 +33,31 @@ internal class TreePlanter : RustPlugin
     private PluginConfig _config;
 
     #endregion
-    
+
     #region Lang
+
+    private struct LangKeys
+    {
+        public const string MESSAGE_PREFIX = "Message.Prefix";
+        public const string MESSAGE_PERMISSION = "Message.Permission";
+        public const string MESSAGE_INFO = "Message.Info";
+        public const string MESSAGE_ITEM = "Message.Item";
+        public const string MESSAGE_AUTHED = "Message.Authed";
+        public const string MESSAGE_BALANCE = "Message.Balance";
+        public const string MESSAGE_PLANTER = "Message.Planter";
+        public const string MESSAGE_GROUND = "Message.Ground";
+        public const string MESSAGE_PLANTED = "Message.Planted";
+        public const string MESSAGE_RECEIVED = "Message.Received";
+
+        public const string UI_HEADING_TEXT = "UI.HeadingText";
+        public const string UI_CLOSE_TEXT = "UI.CloseText";
+        public const string UI_ITEMS_TEXT = "UI.ItemsText";
+        public const string UI_EMPTY_LABEL = "UI.EmptyText";
+        public const string UI_PREV_ICON = "UI.PrevIcon";
+        public const string UI_NEXT_ICON = "UI.NextIcon";
+
+        public const string ERROR_NOT_FOUND = "Error.NotFound";
+    }
 
     protected override void LoadDefaultMessages()
     {
@@ -50,39 +73,16 @@ internal class TreePlanter : RustPlugin
             {LangKeys.MESSAGE_GROUND, "Must be planted in the ground."},
             {LangKeys.MESSAGE_PLANTED, "<color=#FFC55C>{0}</color> was successfully planted."},
             {LangKeys.MESSAGE_RECEIVED, "You've purchased <color=#FFC55C>{0}x</color> <color=#FFC55C>{1}</color>."},
-                
+
             {LangKeys.UI_HEADING_TEXT, "TREE PLANTER"},
             {LangKeys.UI_CLOSE_TEXT, "CLOSE"},
             {LangKeys.UI_ITEMS_TEXT, "{0}\n{1} Cost\n{2}x"},
             {LangKeys.UI_EMPTY_LABEL, "NOTHING TO SHOW HERE"},
             {LangKeys.UI_PREV_ICON, "◀"},
             {LangKeys.UI_NEXT_ICON, "▶"},
-                
+
             {LangKeys.ERROR_NOT_FOUND, "No item found by that name."},
         }, this);
-    }
-
-    private struct LangKeys
-    {
-        public const string MESSAGE_PREFIX = "Message.Prefix";
-        public const string MESSAGE_PERMISSION = "Message.Permission";
-        public const string MESSAGE_INFO = "Message.Info";
-        public const string MESSAGE_ITEM = "Message.Item";
-        public const string MESSAGE_AUTHED = "Message.Authed";
-        public const string MESSAGE_BALANCE = "Message.Balance";
-        public const string MESSAGE_PLANTER = "Message.Planter";
-        public const string MESSAGE_GROUND = "Message.Ground";
-        public const string MESSAGE_PLANTED = "Message.Planted";
-        public const string MESSAGE_RECEIVED = "Message.Received";
-            
-        public const string UI_HEADING_TEXT = "UI.HeadingText";
-        public const string UI_CLOSE_TEXT = "UI.CloseText";
-        public const string UI_ITEMS_TEXT = "UI.ItemsText";
-        public const string UI_EMPTY_LABEL = "UI.EmptyText";
-        public const string UI_PREV_ICON = "UI.PrevIcon";
-        public const string UI_NEXT_ICON = "UI.NextIcon";
-            
-        public const string ERROR_NOT_FOUND = "Error.NotFound";
     }
         
     private string Lang(string key, string id = null, params object[] args)

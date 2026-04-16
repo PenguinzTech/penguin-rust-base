@@ -101,7 +101,7 @@ namespace Oxide.Plugins
         {
             // RCON and server console have no Connection — always allow
             if (a.Connection == null) return true;
-            var p = a.Connection?.player as BasePlayer;
+            var p = (BasePlayer)a.Connection?.player;
             if (p != null && permission.UserHasPermission(p.UserIDString, AdminPerm)) return true;
             a.ReplyWith("No permission.");
             return false;
