@@ -264,6 +264,33 @@ Pass comma-separated Steam IDs to automatically grant admin access on every cont
 
 Permissions are also re-granted via `OnPluginLoaded` whenever a plugin hot-reloads or is added via `/plugin add`, so admins never need manual `oxide.grant` calls for the plugins listed above.
 
+### Patched plugin dependencies
+
+The patched plugins use Oxide's `[PluginReference]` soft-dependency mechanism — a missing dependency sets the reference to `null` at runtime and the plugin still loads; only the integration feature is silently disabled. No manual action is required unless you want the optional integration.
+
+**Dependencies satisfied automatically** (both sides are always-loaded patched plugins):
+
+| Plugin | Depends on | Status |
+|---|---|---|
+| DynamicPVP | ZoneManager | ✅ satisfied — both patched |
+| VehicleLicence | ZoneManager | ✅ satisfied — both patched |
+| PlayerAdministration | BetterChatMute | ✅ satisfied — both patched |
+| Quests | BetterChat | ✅ satisfied — both patched |
+
+**Optional integrations** (plugins not included in this image; install via `RUST_PLUGINS` or umod.org if you want these features):
+
+| Dependency | Required by | Feature gated |
+|---|---|---|
+| `Economics` / `ServerRewards` | NTeleportation, Quests, TreePlanter, VehicleLicence, PlayerAdministration | Economy cost for teleports/quests/vehicles |
+| `Clans` | AntiOfflineRaid, NTeleportation, TreePlanter, VehicleLicence | Clan-member bypass rules |
+| `Friends` | NTeleportation, VehicleLicence | Friends-list bypass rules |
+| `ImageLibrary` | TreePlanter, **UiPlus** | UI icons in planting menu; **required** by UiPlus (hard dependency — UiPlus won't load without it) |
+| `Backpacks` | DynamicPVP, ZoneManager, PlayerAdministration | Backpack rules in PvP/zones |
+| `TruePVE` | DynamicPVP | TruePVE integration for dynamic zones |
+| `NoEscape` / `RaidBlock` | NTeleportation | Block teleports during raids |
+
+> **UiPlus note:** UiPlus declares a hard `[Requires("ImageLibrary")]` dependency. If you use UiPlus, add `imagelibrary` to `RUST_PLUGINS` so it activates before UiPlus loads.
+
 **Finding your Steam ID:**
 - Visit [steamid.io](https://steamid.io) or [SteamIDFinder](https://www.steamidfinder.com/)
 - Copy the **64-bit SteamID** (starts with `765611...`)
