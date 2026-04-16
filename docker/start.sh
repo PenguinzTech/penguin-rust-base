@@ -559,7 +559,7 @@ if [ -z "${RUST_RCON_PASSWORD:-}" ]; then
         RUST_RCON_PASSWORD=$(cat "${RCON_PW_FILE}")
         echo "[startup] RCON password loaded from ${RCON_PW_FILE}"
     else
-        RUST_RCON_PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 31)
+        RUST_RCON_PASSWORD=$(set +o pipefail; tr -dc 'A-Za-z0-9' </dev/urandom | head -c 31; set -o pipefail)
         mkdir -p "$(dirname "${RCON_PW_FILE}")"
         printf '%s\n' "${RUST_RCON_PASSWORD}" > "${RCON_PW_FILE}"
         chmod 600 "${RCON_PW_FILE}"
