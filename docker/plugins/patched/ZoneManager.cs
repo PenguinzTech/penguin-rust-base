@@ -1,4 +1,4 @@
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (arg.Player()→arg.Connection?.player, userID.Get()→userID)
 
 ﻿using Facepunch;
 using Newtonsoft.Json;
@@ -405,7 +405,7 @@ namespace Oxide.Plugins
 
         private object OnServerCommand(ConsoleSystem.Arg arg)
         {
-            BasePlayer player = arg.Player();
+            BasePlayer player = arg.Connection?.player as BasePlayer;
             if (!player || string.IsNullOrEmpty(arg.cmd?.Name))
                 return null;
 
@@ -1067,7 +1067,7 @@ namespace Oxide.Plugins
 
         private void EjectPlayer(BasePlayer player, Zone zone)
         {
-            if (zone.keepInList.Contains(player.userID.Get()) || zone.whitelist.Contains(player.userID.Get()))
+            if (zone.keepInList.Contains(player.userID) || zone.whitelist.Contains(player.userID))
                 return;
 
             if (!string.IsNullOrEmpty(zone.definition.Permission))
@@ -1941,9 +1941,9 @@ namespace Oxide.Plugins
                 return string.IsNullOrEmpty(definition.Permission) || Instance.permission.UserHasPermission(player.UserIDString, definition.Permission);
             }
 
-            public bool CanLeaveZone(BasePlayer player) => !keepInList.Contains(player.userID.Get());
+            public bool CanLeaveZone(BasePlayer player) => !keepInList.Contains(player.userID);
 
-            public bool CanEnterZone(BasePlayer player) => HasPermission(player) || !CanLeaveZone(player) || whitelist.Contains(player.userID.Get());
+            public bool CanEnterZone(BasePlayer player) => HasPermission(player) || !CanLeaveZone(player) || whitelist.Contains(player.userID);
             #endregion
 
             #region Flags
@@ -2302,7 +2302,7 @@ namespace Oxide.Plugins
 
         private bool HasPermission(ConsoleSystem.Arg arg, string perm)
         {
-            BasePlayer player = arg.Player();
+            BasePlayer player = arg.Connection?.player as BasePlayer;
             return !player || permission.UserHasPermission(player.UserIDString, perm);
         }
         
@@ -2340,15 +2340,15 @@ namespace Oxide.Plugins
                 AttractPlayer(player, zone);
         }
 
-        private void RemoveFromKeepinlist(Zone zone, BasePlayer player) => zone.keepInList.Remove(player.userID.Get());
+        private void RemoveFromKeepinlist(Zone zone, BasePlayer player) => zone.keepInList.Remove(player.userID);
 
         private void AddToWhitelist(Zone zone, BasePlayer player)
         {
-            if (!zone.whitelist.Contains(player.userID.Get()))
+            if (!zone.whitelist.Contains(player.userID))
                 zone.whitelist.Add(player.userID);
         }
 
-        private void RemoveFromWhitelist(Zone zone, BasePlayer player) => zone.whitelist.Remove(player.userID.Get());
+        private void RemoveFromWhitelist(Zone zone, BasePlayer player) => zone.whitelist.Remove(player.userID);
 
         private bool HasPlayerFlag(BasePlayer player, int flag)
         {
@@ -3957,7 +3957,7 @@ namespace Oxide.Plugins
             string[] args = new string[arg.Args.Length - 1];
             Array.Copy(arg.Args, 1, args, 0, args.Length);
 
-            UpdateZoneDefinition(zone, args, arg.Player());
+            UpdateZoneDefinition(zone, args, arg.Connection?.player as BasePlayer);
             zone.Reset();
             
             Interface.CallHook("OnZoneUpdated", zoneId);

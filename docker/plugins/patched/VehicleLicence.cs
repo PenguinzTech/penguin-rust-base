@@ -21,7 +21,7 @@ using Random = UnityEngine.Random;
 
 // TODO: Fix mincopters spawning above user.
 
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID->FindAwakeOrSleeping)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping; ulong.ToString() on FindAwakeOrSleeping call; userID.Get()→userID)
 namespace Oxide.Plugins
 {
     [Info("Vehicle Licence", "Sorrow/TheDoc/Arainrr", "1.8.9")]
@@ -1272,7 +1272,7 @@ namespace Oxide.Plugins
         {
             if (vehicle == null || player == null) return null;
             if (!vehiclesCache.TryGetValue(vehicle, out Vehicle foundVehicle)) return null;
-            ulong userID = player.userID.Get();
+            ulong userID = player.userID;
 
             if (foundVehicle.PlayerId == userID || AreFriends(foundVehicle.PlayerId, player.userID)) return null;
             if (HasAdminPermission(player)) return null;
@@ -1739,11 +1739,11 @@ namespace Oxide.Plugins
                 switch (entry.Key.ToLower())
                 {
                     case "economics":
-                        Economics?.Call("Withdraw", player.userID.Get(), (double)entry.Value.amount);
+                        Economics?.Call("Withdraw", player.userID, (double)entry.Value.amount);
                         continue;
 
                     case "serverrewards":
-                        ServerRewards?.Call("TakePoints", player.userID.Get(), entry.Value.amount);
+                        ServerRewards?.Call("TakePoints", player.userID, entry.Value.amount);
                         continue;
                 }
             }
@@ -1775,7 +1775,7 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    missingAmount = CheckBalance(entry.Key, entry.Value.amount, player.userID.Get());
+                    missingAmount = CheckBalance(entry.Key, entry.Value.amount, player.userID);
                 }
 
                 if (missingAmount <= 0)
@@ -5042,7 +5042,7 @@ namespace Oxide.Plugins
                 vehiclePrivilege.AddPlayer(player);
                 foreach (ulong id in team.members)
                 {
-                    teammate = BasePlayer.FindAwakeOrSleeping(id);
+                    teammate = BasePlayer.FindAwakeOrSleeping(id.ToString());
                     if (teammate == null) continue;
                     vehiclePrivilege.AddPlayer(teammate);
                 }
@@ -5063,7 +5063,7 @@ namespace Oxide.Plugins
         {
             SpawnVehicle(player, vehicleType, bypassCooldown, command);
 
-            if (!GetLicensedVehicle(player.userID.Get(), vehicleType)) return false;
+            if (!GetLicensedVehicle(player.userID, vehicleType)) return false;
 
             return true;
         }
@@ -5080,7 +5080,7 @@ namespace Oxide.Plugins
         {
             KillVehicle(player, vehicleType, response);
 
-            if (GetLicensedVehicle(player.userID.Get(), vehicleType)) return false;
+            if (GetLicensedVehicle(player.userID, vehicleType)) return false;
 
             return true;
         }
