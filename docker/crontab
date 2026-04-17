@@ -8,6 +8,7 @@
 # Compare baked hashes against upstream releases every 5 minutes.
 # Only acts when PLUGIN_SOURCE=github and an update exists.
 */5 * * * * /usr/local/bin/check-plugin-updates.sh
+*/5 * * * * /usr/local/bin/user-sync.sh
 
 # ─── Facepunch forced wipe ──────────────────────────────────────────────────
 # First Thursday of month, 19:00 London time. Warning sequence starts 60 min

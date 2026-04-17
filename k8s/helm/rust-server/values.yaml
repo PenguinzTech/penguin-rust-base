@@ -39,6 +39,19 @@ rcon:
   existingSecret: ""       # name of k8s secret with key RUST_RCON_PASSWORD
   secretKey: "RUST_RCON_PASSWORD"
 
+# User sync — MySQL backend for admins, moderators, and bans
+# Set enabled: true and configure db credentials to activate the 5-minute sync.
+userSync:
+  enabled: false
+  db:
+    host: ""
+    port: 3306
+    user: ""
+    name: ""              # MySQL database name (USER_SYNC_DB)
+    password: ""          # Set directly (not recommended) or use existingSecret
+    existingSecret: ""    # Name of a K8s Secret containing USER_SYNC_DB_PASS
+    secretKey: "USER_SYNC_DB_PASS"
+
 # Oxide / plugin config
 oxide:
   enabled: "1"

@@ -112,6 +112,7 @@ RUN dpkg --add-architecture i386 && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        default-mysql-client \
         iptables \
         jq \
         lib32gcc-s1 \
@@ -257,8 +258,9 @@ COPY --chown=rustserver:rustserver crontab /etc/penguin-rust/crontab
 COPY --chown=rustserver:rustserver check-plugin-updates.sh /usr/local/bin/check-plugin-updates.sh
 COPY --chown=rustserver:rustserver wipe-check.sh /usr/local/bin/wipe-check.sh
 COPY --chown=rustserver:rustserver manage-plugin.sh /usr/local/bin/manage-plugin.sh
+COPY --chown=rustserver:rustserver user-sync.sh /usr/local/bin/user-sync.sh
 RUN chmod +x /usr/local/bin/check-plugin-updates.sh /usr/local/bin/wipe-check.sh \
-             /usr/local/bin/manage-plugin.sh
+             /usr/local/bin/manage-plugin.sh /usr/local/bin/user-sync.sh
 
 # ─── Startup script ──────────────────────────────────────────────────────────
 COPY --chown=rustserver:rustserver start.sh /start.sh

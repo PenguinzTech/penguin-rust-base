@@ -118,6 +118,26 @@ spec:
             - name: RUST_RCON_PASSWORD
               value: {{ .Values.rcon.password | quote }}
             {{- end }}
+            {{- if .Values.userSync.enabled }}
+            - name: USER_SYNC_DB_HOST
+              value: {{ .Values.userSync.db.host | quote }}
+            - name: USER_SYNC_DB_PORT
+              value: {{ .Values.userSync.db.port | quote }}
+            - name: USER_SYNC_DB_USER
+              value: {{ .Values.userSync.db.user | quote }}
+            - name: USER_SYNC_DB
+              value: {{ .Values.userSync.db.name | quote }}
+            {{- if .Values.userSync.db.existingSecret }}
+            - name: USER_SYNC_DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.userSync.db.existingSecret }}
+                  key: {{ .Values.userSync.db.secretKey }}
+            {{- else if .Values.userSync.db.password }}
+            - name: USER_SYNC_DB_PASS
+              value: {{ .Values.userSync.db.password | quote }}
+            {{- end }}
+            {{- end }}
             # ── Oxide / plugins ──────────────────────────────────────────────
             - name: OXIDE
               value: {{ .Values.oxide.enabled | quote }}
