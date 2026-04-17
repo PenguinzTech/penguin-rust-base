@@ -1,4 +1,4 @@
-.PHONY: reboot wipe force-restart helm-upgrade message save ban admin mod whitelist logs status help
+.PHONY: reboot wipe force-restart helm-upgrade message save ban admin mod whitelist fps logs status help
 
 KUBE_CONTEXT  ?= dal2-beta
 NAMESPACE     ?= penguin-rust
@@ -111,6 +111,17 @@ helm-upgrade: ## Apply Helm chart changes without rebooting players  (TAG=<epoch
 	  --values k8s/helm/rust-server/values.yaml \
 	  --values k8s/helm/rust-server/values-beta.yaml \
 	  $(if $(TAG),--set image.tag=$(TAG),)
+
+fps: ## Query current server FPS via RCON  (RCON_PASSWORD=<pw> make fps)
+	@if [ -z "$(RCON_PASSWORD)" ]; then \
+	  echo "ERROR: set RCON_PASSWORD before running: RCON_PASSWORD=<pw> make fps"; \
+	  exit 1; \
+	fi
+	MODE=fps \
+	RCON_HOST="$(RCON_HOST)" RCON_PORT=$(RCON_PORT) \
+	RCON_PASSWORD="$(RCON_PASSWORD)" \
+	KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) RELEASE=$(RELEASE) \
+	bash scripts/admin.sh
 
 logs: ## Tail live server logs  (KUBE_CONTEXT=<ctx> make logs)
 	kubectl --context $(KUBE_CONTEXT) logs -n $(NAMESPACE) \

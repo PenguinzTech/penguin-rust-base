@@ -10,6 +10,7 @@
 # MODE=admin         search player → confirm → ownerid + server.writecfg
 # MODE=mod           search player → confirm → moderatorid + server.writecfg
 # MODE=whitelist     search player → confirm → oxide.grant user <id> whitelist.allow
+# MODE=fps           query current server FPS via RCON
 #
 # Usage:
 #   RCON_PASSWORD=<pw> make reboot
@@ -21,6 +22,7 @@
 #   RCON_PASSWORD=<pw> [PLAYER=<id/name>] make admin
 #   RCON_PASSWORD=<pw> [PLAYER=<id/name>] make mod
 #   RCON_PASSWORD=<pw> [PLAYER=<id/name>] make whitelist
+#   RCON_PASSWORD=<pw> make fps
 
 set -euo pipefail
 
@@ -38,7 +40,7 @@ MODE="${MODE:-reboot}"
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
-VALID_MODES="reboot wipe force-restart message save ban admin mod whitelist"
+VALID_MODES="reboot wipe force-restart message save ban admin mod whitelist fps"
 if ! echo "$VALID_MODES" | grep -qw "$MODE"; then
   echo "ERROR: MODE must be one of: ${VALID_MODES} (got: '$MODE')"
   exit 1
@@ -314,6 +316,14 @@ if [[ "$MODE" == "whitelist" ]]; then
   echo "==> Granting whitelist.allow to ${RESOLVED_NAME} (${RESOLVED_STEAMID})..."
   rcon_cmd "oxide.grant user ${RESOLVED_STEAMID} whitelist.allow"
   echo "==> Done. ${RESOLVED_NAME} can now join the whitelisted server."
+  exit 0
+fi
+
+# ── fps ──────────────────────────────────────────────────────────────────────
+
+if [[ "$MODE" == "fps" ]]; then
+  echo "==> Querying server FPS..."
+  rcon_cmd "fps"
   exit 0
 fi
 
