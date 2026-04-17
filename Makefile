@@ -1,4 +1,4 @@
-.PHONY: reboot wipe force-restart helm-upgrade message save logs status help
+.PHONY: reboot wipe force-restart helm-upgrade message save ban admin mod whitelist logs status help
 
 KUBE_CONTEXT  ?= dal2-beta
 NAMESPACE     ?= penguin-rust
@@ -57,6 +57,50 @@ save: ## Force a world save via RCON  (RCON_PASSWORD=<pw> make save)
 	MODE=save \
 	RCON_HOST="$(RCON_HOST)" RCON_PORT=$(RCON_PORT) \
 	RCON_PASSWORD="$(RCON_PASSWORD)" \
+	KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) RELEASE=$(RELEASE) \
+	bash scripts/admin.sh
+
+ban: ## Ban a player by SteamID or name  (RCON_PASSWORD=<pw> [PLAYER=<id/name>] [REASON=<text>] make ban)
+	@if [ -z "$(RCON_PASSWORD)" ]; then \
+	  echo "ERROR: set RCON_PASSWORD before running: RCON_PASSWORD=<pw> make ban"; \
+	  exit 1; \
+	fi
+	MODE=ban \
+	RCON_HOST="$(RCON_HOST)" RCON_PORT=$(RCON_PORT) \
+	RCON_PASSWORD="$(RCON_PASSWORD)" PLAYER="$(PLAYER)" REASON="$(REASON)" \
+	KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) RELEASE=$(RELEASE) \
+	bash scripts/admin.sh
+
+admin: ## Grant admin (ownerid) to a player  (RCON_PASSWORD=<pw> [PLAYER=<id/name>] make admin)
+	@if [ -z "$(RCON_PASSWORD)" ]; then \
+	  echo "ERROR: set RCON_PASSWORD before running: RCON_PASSWORD=<pw> make admin"; \
+	  exit 1; \
+	fi
+	MODE=admin \
+	RCON_HOST="$(RCON_HOST)" RCON_PORT=$(RCON_PORT) \
+	RCON_PASSWORD="$(RCON_PASSWORD)" PLAYER="$(PLAYER)" \
+	KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) RELEASE=$(RELEASE) \
+	bash scripts/admin.sh
+
+mod: ## Grant moderator to a player  (RCON_PASSWORD=<pw> [PLAYER=<id/name>] make mod)
+	@if [ -z "$(RCON_PASSWORD)" ]; then \
+	  echo "ERROR: set RCON_PASSWORD before running: RCON_PASSWORD=<pw> make mod"; \
+	  exit 1; \
+	fi
+	MODE=mod \
+	RCON_HOST="$(RCON_HOST)" RCON_PORT=$(RCON_PORT) \
+	RCON_PASSWORD="$(RCON_PASSWORD)" PLAYER="$(PLAYER)" \
+	KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) RELEASE=$(RELEASE) \
+	bash scripts/admin.sh
+
+whitelist: ## Grant whitelist.allow oxide permission  (RCON_PASSWORD=<pw> [PLAYER=<id/name>] make whitelist)
+	@if [ -z "$(RCON_PASSWORD)" ]; then \
+	  echo "ERROR: set RCON_PASSWORD before running: RCON_PASSWORD=<pw> make whitelist"; \
+	  exit 1; \
+	fi
+	MODE=whitelist \
+	RCON_HOST="$(RCON_HOST)" RCON_PORT=$(RCON_PORT) \
+	RCON_PASSWORD="$(RCON_PASSWORD)" PLAYER="$(PLAYER)" \
 	KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) RELEASE=$(RELEASE) \
 	bash scripts/admin.sh
 
