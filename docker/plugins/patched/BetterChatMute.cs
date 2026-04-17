@@ -1,10 +1,9 @@
-// PATCHED by penguin-rust-base: added missing 'using Rust;' directive for Chat.ChatChannel type resolution
+// PATCHED by penguin-rust-base: Chat.ChatChannel removed from Oxide 2.x — cast ChatChannel to int, compare to 0 (Global) per enum definition
 
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
-using Rust;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -97,8 +96,9 @@ namespace Oxide.Plugins
         private void OnBetterChat(Dictionary<string, object> messageData)
         {
 #if RUST
-            var chatChannel = (Chat.ChatChannel)messageData["ChatChannel"];
-            bool isPublicMessage = chatChannel == Chat.ChatChannel.Global;
+            // Chat.ChatChannel removed from Oxide 2.x compile context — use int comparison.
+            // Chat.ChatChannel.Global == 0 per Rust enum definition.
+            bool isPublicMessage = Convert.ToInt32(messageData["ChatChannel"]) == 0;
 #else
             bool isPublicMessage = true;
 #endif

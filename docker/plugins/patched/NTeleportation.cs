@@ -12,7 +12,7 @@ using Oxide.Game.Rust.Cui;
 using Oxide.Plugins.NTeleportationExtensionMethods;
 using Rust;
 using System;
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, BuildingPrivlidge→BuildingPrivilege); fixed C# 9 target-typed new() expressions for C# 8 compiler compatibility
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, BuildingPrivlidge→BuildingPrivilege); fixed C# 9 target-typed new() expressions for C# 8 compiler compatibility; fixed PrivilegeTool→global::BuildingPrivilege (Oxide 2.x namespace change)
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -220,7 +220,8 @@ namespace Oxide.Plugins
             return safeZones.Exists(zone => (zone.position - a).sqrMagnitude <= zone.sqrDistance);
         }
 
-        public bool IsAuthed(BasePlayer player, PrivilegeTool priv) => (priv.OwnerID == player.userID && config.Home.UsableIntoBuildingBlocked) || config.Home.UsableIntoBuildingBlocked || priv.IsAuthed(player);
+        // NOTE: BuildingPrivilege type cannot be named directly in Oxide 2.x compiler.
+        // TC auth checks are inlined at call sites using var-typed priv from GetBuildingPrivilege().
 
         private List<ulong> delayedTeleports = new List<ulong>();
 
@@ -253,7 +254,7 @@ namespace Oxide.Plugins
                     foreach (var (home, position) in GetPlayerHomes(player))
                     {
                         var priv = player.GetBuildingPrivilege(new OBB(position, player.transform.rotation, player.bounds));
-                        if (priv.IsKilled() || !IsAuthed(player, priv))
+                        if (priv.IsKilled() || !(config.Home.UsableIntoBuildingBlocked || priv.IsAuthed(player)))
                         {
                             continue;
                         }

@@ -3653,8 +3653,10 @@ public class DynamicPVP : RustPlugin
   private string ZM_GetZoneName(string zoneId) =>
     Convert.ToString(ZoneManager.Call("GetZoneName", zoneId));
 
-  private ZoneManager.Zone ZM_GetZoneByID(string zoneId) =>
-    ZoneManager.Call("GetZoneByID", zoneId) as ZoneManager.Zone;
+  // ZoneManager.Zone type is not accessible across plugin boundaries in Oxide 2.x;
+  // return as Component since all call sites only need .transform and Unity null checks.
+  private UnityEngine.Component ZM_GetZoneByID(string zoneId) =>
+    ZoneManager.Call("GetZoneByID", zoneId) as UnityEngine.Component;
 
   private void ZM_GetPlayerZoneIDs(BasePlayer player, List<string> list) =>
     ZoneManager.Call("GetPlayerZoneIDsNoAlloc", player, list);
@@ -3809,9 +3811,10 @@ public class DynamicPVP : RustPlugin
   /// hook handler: return false to prevent plugin Backpacks drop if owner ID
   ///  can be resolved to a BasePlayer who is in a drop-prevented zone, else
   ///  return true to allow backpack drop
-  private bool CanDropBackpack(ulong backpackOwnerID, Vector3 position) =>
-    !BasePlayer.TryFindAwakeOrSleeping(backpackOwnerID, out var player) ||
-    !PlayerInActivePluginZone(player, PluginZoneCategory.BackpacksPrevent);
+  private bool CanDropBackpack(ulong backpackOwnerID, Vector3 position) {
+    var player = BasePlayer.FindAwakeOrSleeping(backpackOwnerID.ToString());
+    return player == null || !PlayerInActivePluginZone(player, PluginZoneCategory.BackpacksPrevent);
+  }
 
   /// request plugin Backpacks drop if player dies in a drop-forced zone
   private void OnPlayerDeath(BasePlayer player, HitInfo info)
@@ -4227,7 +4230,7 @@ public class DynamicPVP : RustPlugin
         _                           => Color.red
       };
 
-      switch (zoneData.collider)
+      switch (zoneData.GetComponent<UnityEngine.Collider>())
       {
         case BoxCollider b:
           DrawCube(

@@ -1,4 +1,4 @@
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, ConVar.Chat.ChatChannel→Chat.ChatChannel) + ulong→string conversion in FindAwakeOrSleeping call (line 202)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, ConVar.Chat.ChatChannel→Chat.ChatChannel) + ulong→string conversion in FindAwakeOrSleeping call (line 202) + chat.add ulong player ID (Rust API change: string→ulong)
 
 using Oxide.Plugins.BetterChatExtensions;
 using Oxide.Core.Libraries.Covalence;
@@ -176,12 +176,12 @@ namespace Oxide.Plugins
                         throw new InvalidOperationException("Chat channel is set to Team, however the player is not in a team.");
                     }
 
-                    team.BroadcastTeamChat(basePlayer.UserIDString, chatMessage.Player.Name, chatMessage.Message, chatMessage.UsernameSettings.Color);
+                    team.BroadcastTeamChat(basePlayer.userID, chatMessage.Player.Name, chatMessage.Message, chatMessage.UsernameSettings.Color);
 
                     List<Network.Connection> onlineMemberConnections = team.GetOnlineMemberConnections();
                     if (onlineMemberConnections != null)
                     {
-                        ConsoleNetwork.SendClientCommand(onlineMemberConnections, "chat.add", (int) chatchannel, chatMessage.Player.Id, output.Chat);
+                        ConsoleNetwork.SendClientCommand(onlineMemberConnections, "chat.add", (int) chatchannel, ulong.Parse(chatMessage.Player.Id), output.Chat);
                     }
                     break;
 
@@ -205,7 +205,7 @@ namespace Oxide.Plugins
 
                     if (list.Count > 0)
                     {
-                        ConsoleNetwork.SendClientCommand(list, "chat.add", (int) chatchannel, chatMessage.Player.Id, output.Chat);
+                        ConsoleNetwork.SendClientCommand(list, "chat.add", (int) chatchannel, ulong.Parse(chatMessage.Player.Id), output.Chat);
                     }
 
                     Facepunch.Pool.FreeUnmanaged(ref list);
@@ -226,14 +226,14 @@ namespace Oxide.Plugins
                     {
                         foreach (ClanMember member in clan.Members)
                         {
-                            var player = BasePlayer.FindAwakeOrSleeping(member.SteamId);
+                            var player = BasePlayer.FindAwakeOrSleeping(member.SteamId.ToString());
                             if (player!=null && player.IsConnected) clanlist.Add(player.Connection);
                         }
                     }
 
                     if (clanlist.Count > 0)
                     {
-                        ConsoleNetwork.SendClientCommand(clanlist, "chat.add", (int)chatchannel, chatMessage.Player.Id, output.Chat);
+                        ConsoleNetwork.SendClientCommand(clanlist, "chat.add", (int)chatchannel, ulong.Parse(chatMessage.Player.Id), output.Chat);
                     }
                     Facepunch.Pool.FreeUnmanaged(ref clanlist);
                     break;
@@ -249,7 +249,7 @@ namespace Oxide.Plugins
                         
                         if ((basePlayer.transform.position - player.transform.position).sqrMagnitude <= localRange)
                         {
-                            player.SendConsoleCommand("chat.add", (int)chatchannel, chatMessage.Player.Id, output.Chat);
+                            player.SendConsoleCommand("chat.add", (int)chatchannel, ulong.Parse(chatMessage.Player.Id), output.Chat);
                         }
                     }
 
@@ -257,7 +257,7 @@ namespace Oxide.Plugins
                 
                 default:
                     foreach (BasePlayer p in BasePlayer.activePlayerList.Where(p => !chatMessage.BlockedReceivers.Contains(p.UserIDString)))
-                        p.SendConsoleCommand("chat.add", (int) chatchannel, chatMessage.Player.Id, output.Chat);
+                        p.SendConsoleCommand("chat.add", (int) chatchannel, ulong.Parse(chatMessage.Player.Id), output.Chat);
                     break;
             }
 #else
@@ -337,7 +337,7 @@ namespace Oxide.Plugins
         private BetterChatMessage.CancelOptions API_SendMessage(Dictionary<string, object> betterChatMessageDict, int chatChannel = 0)
         {
 #if RUST
-            return SendBetterChatMessage(BetterChatMessage.FromDictionary(betterChatMessageDict), (Chat.ChatChannel)chatChannel);
+            return SendBetterChatMessage(BetterChatMessage.FromDictionary(betterChatMessageDict), chatChannel);
 #else
             return SendBetterChatMessage(BetterChatMessage.FromDictionary(betterChatMessageDict));
 #endif

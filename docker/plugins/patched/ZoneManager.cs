@@ -274,7 +274,7 @@ namespace Oxide.Plugins
             }
             else
             {
-                if (entity is BuildingPrivilege)
+                if (entity?.ShortPrefabName == "cupboard.tool.deployed")
                 {
                     if (!HasPlayerFlag(player, ZoneFlags.NoCup)) 
                         return;
@@ -390,7 +390,7 @@ namespace Oxide.Plugins
         private object OnBetterChat(Oxide.Core.Libraries.Covalence.IPlayer iPlayer, string message)
         {
             BasePlayer player = iPlayer.Object as BasePlayer;
-            return OnPlayerChat(player, message, Chat.ChatChannel.Global);
+            return OnPlayerChat(player, message, 0); // 0 = Chat.ChatChannel.Global
         }
 
         private object OnPlayerVoice(BasePlayer player, Byte[] data)

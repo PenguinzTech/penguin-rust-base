@@ -1138,7 +1138,7 @@ namespace Oxide.Plugins
             );
             string panelBanByIdGroup = aUIObj.AddElement(panel, CBanByIdGroupPanel);
 
-            if (VerifyPermission(aUIObj.PlayerId, CPermBan)) {
+            if (VerifyPermission(aUIObj.PlayerId.ToString(), CPermBan)) {
                 aUIObj.AddElement(panelBanByIdGroup, CBanByIdEdt);
                 aUIObj.AddElement(panel, CBanByIdActiveBtn);
             } else {
@@ -1334,7 +1334,7 @@ namespace Oxide.Plugins
 
             LogDebug("AddUserPageInfoLabels > Generic info has been added.");
 
-            if (VerifyPermission(aUIObj.PlayerId, CPermDetailInfo)) {
+            if (VerifyPermission(aUIObj.PlayerId.ToString(), CPermDetailInfo)) {
                 aUIObj.AddLabel(
                     aParent, CUserPageLblFlagLbAnchor, CUserPageLblFlagRtAnchor, CuiColor.TextAlt, string.Format(lang.GetMessage(
                         "Flags Label Format", this, aUIObj.PlayerIdString),
@@ -1517,7 +1517,7 @@ namespace Oxide.Plugins
 
                 // --- Build player action panel
                 // Ban, Kick
-                if (aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId, CPermBan)) { // No need to check for null, as we ban the ID and don't attempt retrieval
+                if (aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId.ToString(), CPermBan)) { // No need to check for null, as we ban the ID and don't attempt retrieval
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnBanLbAnchor, CUserPageBtnBanRtAnchor, CuiColor.ButtonDanger, CuiColor.TextAlt,
                         lang.GetMessage("Ban Button Text", this, aUIObj.PlayerIdString), $"{CBanUserCmd} {aPlayerId}"
@@ -1529,7 +1529,7 @@ namespace Oxide.Plugins
                     );
                 }
 
-                if (isPlayerConnected && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId, CPermKick)) {
+                if (isPlayerConnected && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId.ToString(), CPermKick)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnKickLbAnchor, CUserPageBtnKickRtAnchor, CuiColor.ButtonDanger, CuiColor.TextAlt,
                         lang.GetMessage("Kick Button Text", this, aUIObj.PlayerIdString), $"{CKickUserCmd} {aPlayerId}"
@@ -1552,7 +1552,7 @@ namespace Oxide.Plugins
                 );
 
                 // Unmute, Mute (And timed ones if BetterChat is available)
-                if (isPlayerConnected && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId, CPermMute)) {
+                if (isPlayerConnected && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId.ToString(), CPermMute)) {
                     if (GetIsMuted(ref player)) {
                         aUIObj.AddButton(
                             actionPanel, CUserPageBtnUnmuteLbAnchor, CUserPageBtnUnmuteRtAnchor, CuiColor.ButtonSuccess, CuiColor.TextAlt,
@@ -1619,7 +1619,7 @@ namespace Oxide.Plugins
                         actionPanel, CUserPageBtnFreezeLbAnchor, CUserPageBtnFreezeRtAnchor, CuiColor.ButtonInactive, CuiColor.Text,
                         lang.GetMessage("Freeze Not Installed Button Text", this, aUIObj.PlayerIdString)
                     );
-                } else if (isPlayerConnected && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId, CPermFreeze)) {
+                } else if (isPlayerConnected && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId.ToString(), CPermFreeze)) {
                     if (GetIsFrozen(aPlayerId)) {
                         aUIObj.AddButton(
                             actionPanel, CUserPageBtnUnFreezeLbAnchor, CUserPageBtnUnFreezeRtAnchor, CuiColor.ButtonSuccess, CuiColor.TextAlt,
@@ -1651,7 +1651,7 @@ namespace Oxide.Plugins
                 }
 
                 // Clear inventory, Reset BP, Reset metabolism
-                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermClearInventory)) {
+                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermClearInventory)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnClearInventoryLbAnchor, CUserPageBtnClearInventoryRtAnchor, CuiColor.ButtonWarning, CuiColor.TextAlt,
                         lang.GetMessage("Clear Inventory Button Text", this, aUIObj.PlayerIdString), $"{CClearUserInventoryCmd} {aPlayerId}"
@@ -1663,7 +1663,7 @@ namespace Oxide.Plugins
                     );
                 }
 
-                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermResetBP)) {
+                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermResetBP)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnResetBPLbAnchor, CUserPageBtnResetBPRtAnchor, CuiColor.ButtonWarning, CuiColor.TextAlt,
                         lang.GetMessage("Reset Blueprints Button Text", this, aUIObj.PlayerIdString), $"{CResetUserBPCmd} {aPlayerId}"
@@ -1675,7 +1675,7 @@ namespace Oxide.Plugins
                     );
                 }
 
-                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermResetMetabolism)) {
+                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermResetMetabolism)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnResetMetabolismLbAnchor, CUserPageBtnResetMetabolismRtAnchor, CuiColor.ButtonWarning, CuiColor.TextAlt,
                         lang.GetMessage("Reset Metabolism Button Text", this, aUIObj.PlayerIdString), $"{CResetUserMetabolismCmd} {aPlayerId}"
@@ -1687,7 +1687,7 @@ namespace Oxide.Plugins
                     );
                 }
 
-                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermRecoverMetabolism)) {
+                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermRecoverMetabolism)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnRecoverMetabolismLbAnchor, CUserPageBtnRecoverMetabolismRtAnchor, CuiColor.ButtonWarning, CuiColor.TextAlt,
                         lang.GetMessage("Recover Metabolism Button Text", this, aUIObj.PlayerIdString), $"{CRecoverUserMetabolismCmd} {aPlayerId}"
@@ -1700,7 +1700,7 @@ namespace Oxide.Plugins
                 }
 
                 // Teleport to, Teleport, Spectate
-                if ((!isPlayerNull) && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId, CPermTeleport)) {
+                if ((!isPlayerNull) && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId.ToString(), CPermTeleport)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnTeleportToLbAnchor, CUserPageBtnTeleportToRtAnchor, CuiColor.ButtonSuccess, CuiColor.TextAlt,
                         lang.GetMessage("Teleport To Player Button Text", this, aUIObj.PlayerIdString), $"{CTeleportToUserCmd} {aPlayerId}"
@@ -1720,7 +1720,7 @@ namespace Oxide.Plugins
                     );
                 }
 
-                if ((!isPlayerNull) && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId, CPermSpectate)) {
+                if ((!isPlayerNull) && aPlayerId != aUIObj.PlayerId && VerifyPermission(aUIObj.PlayerId.ToString(), CPermSpectate)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnSpectateLbAnchor, CUserPageBtnSpectateRtAnchor, CuiColor.ButtonSuccess, CuiColor.TextAlt,
                         lang.GetMessage("Spectate Player Button Text", this, aUIObj.PlayerIdString), $"{CSpectateUserCmd} {aPlayerId}"
@@ -1738,7 +1738,7 @@ namespace Oxide.Plugins
                         actionPanel, CUserPageBtnPermsLbAnchor, CUserPageBtnPermsRtAnchor, CuiColor.ButtonInactive, CuiColor.Text,
                         lang.GetMessage("Perms Not Installed Button Text", this, aUIObj.PlayerIdString)
                     );
-                } else if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermPerms)) {
+                } else if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermPerms)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnPermsLbAnchor, CUserPageBtnPermsRtAnchor, CuiColor.ButtonSuccess, CuiColor.TextAlt,
                         lang.GetMessage("Perms Button Text", this, aUIObj.PlayerIdString), $"{CPermsCmd} {aPlayerId}"
@@ -1754,7 +1754,7 @@ namespace Oxide.Plugins
                     aUIObj.AddButton(
                     actionPanel, CUserPageBtnBackpacksLbAnchor, CUserPageBtnBackpacksRtAnchor, CuiColor.ButtonInactive, CuiColor.Text,
                     lang.GetMessage("Backpacks Not Installed Button Text", this, aUIObj.PlayerIdString));
-                } else if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermBackpacks)) {
+                } else if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermBackpacks)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnBackpacksLbAnchor, CUserPageBtnBackpacksRtAnchor, CuiColor.ButtonSuccess, CuiColor.TextAlt,
                         lang.GetMessage("Backpacks Button Text", this, aUIObj.PlayerIdString), $"{CBackpackViewCmd} {aPlayerId}");
@@ -1768,7 +1768,7 @@ namespace Oxide.Plugins
                     aUIObj.AddButton(
                     actionPanel, CUserPageBtnInventoryLbAnchor, CUserPageBtnInventoryRtAnchor, CuiColor.ButtonInactive, CuiColor.Text,
                     lang.GetMessage("Inventory Not Installed Button Text", this, aUIObj.PlayerIdString));
-                } else if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermInventory)) {
+                } else if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermInventory)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnInventoryLbAnchor, CUserPageBtnInventoryRtAnchor, CuiColor.ButtonSuccess, CuiColor.TextAlt,
                         lang.GetMessage("Inventory Button Text", this, aUIObj.PlayerIdString), $"{CInventoryViewCmd} {aPlayerId}");
@@ -1784,7 +1784,7 @@ namespace Oxide.Plugins
                         actionPanel, CUserPageBtnGodmodeLbAnchor, CUserPageBtnGodmodeRtAnchor, CuiColor.ButtonInactive, CuiColor.Text,
                         lang.GetMessage("Godmode Not Installed Button Text", this, aUIObj.PlayerIdString)
                     );
-                } else if (isPlayerConnected && VerifyPermission(aUIObj.PlayerId, CPermGodmode)) {
+                } else if (isPlayerConnected && VerifyPermission(aUIObj.PlayerId.ToString(), CPermGodmode)) {
                     if ((bool)(Godmode.Call("IsGod", aPlayerId) ?? false)) {
                         aUIObj.AddButton(
                             actionPanel, CUserPageBtnUnGodmodeLbAnchor, CUserPageBtnUnGodmodeRtAnchor, CuiColor.ButtonWarning, CuiColor.TextAlt,
@@ -1816,7 +1816,7 @@ namespace Oxide.Plugins
                 }
 
                 // Hurt 25, Hurt 50, Hurt 75, Hurt 100, Kill
-                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermHurt)) {
+                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermHurt)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnHurt25LbAnchor, CUserPageBtnHurt25RtAnchor, CuiColor.ButtonDanger, CuiColor.TextAlt,
                         lang.GetMessage("Hurt 25 Button Text", this, aUIObj.PlayerIdString), $"{CHurtUserCmd} {aPlayerId} 25"
@@ -1852,7 +1852,7 @@ namespace Oxide.Plugins
                     );
                 }
 
-                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermKill)) {
+                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermKill)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnKillLbAnchor, CUserPageBtnKillRtAnchor, CuiColor.ButtonDanger, CuiColor.TextAlt,
                         lang.GetMessage("Kill Button Text", this, aUIObj.PlayerIdString), $"{CKillUserCmd} {aPlayerId}"
@@ -1865,7 +1865,7 @@ namespace Oxide.Plugins
                 }
 
                 // Heal 25, Heal 50, Heal 75, Heal 100, Heal wounds
-                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId, CPermHeal)) {
+                if ((!isPlayerNull) && VerifyPermission(aUIObj.PlayerId.ToString(), CPermHeal)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnHeal25LbAnchor, CUserPageBtnHeal25RtAnchor, CuiColor.ButtonSuccess, CuiColor.TextAlt,
                         lang.GetMessage("Heal 25 Button Text", this, aUIObj.PlayerIdString), $"{CHealUserCmd} {aPlayerId} 25"
@@ -1926,7 +1926,7 @@ namespace Oxide.Plugins
                 );
 
                 // --- Build player action panel
-                if (VerifyPermission(aUIObj.PlayerId, CPermBan)) {
+                if (VerifyPermission(aUIObj.PlayerId.ToString(), CPermBan)) {
                     aUIObj.AddButton(
                         actionPanel, CUserPageBtnBanLbAnchor, CUserPageBtnBanRtAnchor, CuiColor.Button, CuiColor.TextAlt,
                         lang.GetMessage("Unban Button Text", this, aUIObj.PlayerIdString), $"{CUnbanUserCmd} {aPlayerId}"
@@ -3314,7 +3314,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.blueprints.Reset();
+                (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.blueprints.Reset();
                 LogInfo($"{aPlayer.Name}: Reset the blueprints of user ID {targetId}");
             } else {
                 BasePlayer player = BasePlayer.Find(aPlayer.Id);
@@ -3327,7 +3327,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.blueprints.Reset();
+                (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.blueprints.Reset();
                 LogInfo($"{player.displayName}: Reset the blueprints of user ID {targetId}");
                 timer.Once(0.01f, () => BuildUI(player, UiPage.PlayerPage, targetId.ToString()));
             }

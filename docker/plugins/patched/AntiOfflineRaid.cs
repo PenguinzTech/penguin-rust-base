@@ -12,7 +12,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, BuildingPrivlidge→BuildingPrivilege); fixed operator precedence in null-coalescing expression (line 361)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, BuildingPrivlidge→BuildingPrivilege); fixed operator precedence in null-coalescing expression (line 361); fixed ulong→string for FindAwakeOrSleeping (line 440, 674)
 
 //AntiOfflineRaid created with PluginMerge v(1.0.6.0) by MJSU @ https://github.com/dassjosh/Plugin.Merge
 namespace Oxide.Plugins
@@ -437,7 +437,7 @@ namespace Oxide.Plugins
                 LastOnlineTime = lastOnline;
             }
             
-            [JsonIgnore] public BasePlayer AarPlayer => BasePlayer.FindAwakeOrSleeping(UserId);
+            [JsonIgnore] public BasePlayer AarPlayer => BasePlayer.FindAwakeOrSleeping(UserId.ToString());
             
             [JsonIgnore] public double Days => (DateTime.Now - LastOnlineTime).TotalDays;
             
@@ -671,7 +671,7 @@ namespace Oxide.Plugins
         
         private static bool IsPlayerInRange(ulong targetId)
         {
-            var player = BasePlayer.FindAwakeOrSleeping(targetId);
+            var player = BasePlayer.FindAwakeOrSleeping(targetId.ToString());
             return player != null && player.IsBuildingAuthed();
         }
         

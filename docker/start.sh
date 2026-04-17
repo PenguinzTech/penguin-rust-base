@@ -376,6 +376,22 @@ _download_and_activate() {
 activate_plugin() {
     local slug="$1"
 
+    # ── patched/ always wins ──────────────────────────────────────────────────
+    # Pre-patched .cs files take priority over every fetch path (baked, GitHub,
+    # umod). Checked unconditionally here so that plugins without a .hash entry
+    # in disabled/ don't fall through to the umod fallback and create a second
+    # conflicting .cs file alongside the one start-wrapper.sh already placed.
+    local patched_file
+    patched_file=$(find "${OXIDE_PLUGINS_DIR}/patched" -maxdepth 1 -iname "${slug}*.cs" \
+        2>/dev/null | head -1 || true)
+    if [ -n "${patched_file}" ]; then
+        local cs_name
+        cs_name=$(basename "${patched_file}")
+        cp --preserve=mode "${patched_file}" "${OXIDE_PLUGINS_DIR}/${cs_name}"
+        echo "[startup] activated (patched): ${cs_name}"
+        return 0
+    fi
+
     # ── baked-only mode ───────────────────────────────────────────────────────
     if [ "${PLUGIN_SOURCE}" = "baked" ]; then
         if [ ! -f "${OXIDE_PLUGINS_DIR}/disabled/${slug}.hash" ]; then
