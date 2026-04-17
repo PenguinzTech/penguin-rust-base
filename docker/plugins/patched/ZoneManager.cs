@@ -1,4 +1,5 @@
 // PATCHED by penguin-rust-base: fixed removed Oxide APIs (arg.Player()→arg.Connection?.player, userID.Get()→userID)
+// PATCHED by penguin-rust-base: performance opts: sqrMagnitude, HashSet<Zone> EntityZones, ZoneGrid spatial index, HashSet queue dedup, bounds pre-check, cast not GetComponent, List capacity hints
 
 ﻿using Facepunch;
 using Newtonsoft.Json;
@@ -55,6 +56,9 @@ namespace Oxide.Plugins
 
         private bool zonesInitialized = false;
 
+        // OPT3: spatial grid for proximity culling in UpdatePlayerZones
+        private readonly ZoneGrid _zoneGrid = new ZoneGrid();
+        private readonly HashSet<Zone> _gridCandidates = new HashSet<Zone>();
 
         private static ZoneManager Instance { get; set; }
 
@@ -102,8 +106,9 @@ namespace Oxide.Plugins
 
                 if (zone.definition.Owner != plugin)
                     continue;
-            
+
                 zones.Remove(zoneId);
+                _zoneGrid.RemoveZone(zone); // OPT3: remove from spatial grid
 
                 UnityEngine.Object.DestroyImmediate(zone.gameObject);
                 Interface.CallHook("OnZoneErased", zoneId);
@@ -117,17 +122,21 @@ namespace Oxide.Plugins
             if (!baseEntity || !baseEntity.IsValid() || baseEntity.IsDestroyed)
                 return;
 
-            if (!zonedEntities.TryGetValue(baseEntity.net.ID, out EntityZones entityZones)) 
+            if (!zonedEntities.TryGetValue(baseEntity.net.ID, out EntityZones entityZones))
                 return;
 
-            for (int i = entityZones.Zones.Count - 1; i >= 0; i--)
+            // OPT2: Zones is now HashSet — copy to list for safe reverse iteration while calling exit hooks
+            var exitList = Pool.Get<List<Zone>>();
+            exitList.AddRange(entityZones.Zones);
+            for (int i = exitList.Count - 1; i >= 0; i--)
             {
-                Zone zone = entityZones.Zones[i];
+                Zone zone = exitList[i];
                 if (!zone)
                     continue;
 
                 zone.OnEntityExitZone(baseEntity, false, true);
             }
+            Pool.FreeUnmanaged(ref exitList);
 
             zonedEntities.Remove(baseEntity.net.ID);
         }
@@ -146,7 +155,9 @@ namespace Oxide.Plugins
             temporaryZones.Clear();
             zonedPlayers.Clear();
             zonedEntities.Clear();
-            
+            _zoneGrid.Clear(); // OPT3: clear spatial grid
+            _gridCandidates.Clear();
+
             Instance = null;
             Configuration = null;
         }
@@ -186,20 +197,29 @@ namespace Oxide.Plugins
 
             private readonly Queue<BasePlayer> playerUpdateQueue = new Queue<BasePlayer>();
 
+            // OPT4: O(1) membership test replacing O(n) Queue.Contains
+            private readonly HashSet<BasePlayer> _queuedPlayers = new HashSet<BasePlayer>();
+
             private const float MAX_MS = 0.25f;
 
             private void OnDestroy()
             {
                 playerUpdateQueue.Clear();
+                _queuedPlayers.Clear();
             }
 
             public void QueueUpdate(BasePlayer player)
             {
-                if (!playerUpdateQueue.Contains(player))
+                // OPT4: HashSet.Add returns false if already present — O(1) vs old O(n) Contains
+                if (_queuedPlayers.Add(player))
                     playerUpdateQueue.Enqueue(player);
             }
 
-            public void Reset() => playerUpdateQueue.Clear();
+            public void Reset()
+            {
+                playerUpdateQueue.Clear();
+                _queuedPlayers.Clear();
+            }
 
             private void Update()
             {
@@ -218,12 +238,14 @@ namespace Oxide.Plugins
                     }
 
                     BasePlayer player = playerUpdateQueue.Dequeue();
+                    _queuedPlayers.Remove(player); // OPT4: keep set in sync
                     if (!player || !player.IsConnected)
                         continue;
 
                     Instance?.UpdatePlayerZones(player);
 
-                    InvokeHandler.Invoke(this, () => QueueUpdate(player), 2f);
+                    var p = player; // OPT6: local copy avoids closure capturing a stale variable
+                    InvokeHandler.Invoke(this, () => QueueUpdate(p), 2f);
                 }
             }
         }
@@ -638,7 +660,8 @@ namespace Oxide.Plugins
 
         private object CanCraft(ItemCrafter itemCrafter, ItemBlueprint bp, int amount)
         {
-            BasePlayer player = itemCrafter.GetComponent<BasePlayer>();
+            // OPT7: IItemCrafter is always BasePlayer here; direct cast avoids GetComponent overhead
+            BasePlayer player = itemCrafter as BasePlayer;
             if (player && HasPlayerFlag(player, ZoneFlags.NoCraft))
             {
                 SendMessage(player, Message("noCraft", player.UserIDString));
@@ -952,11 +975,13 @@ namespace Oxide.Plugins
             if (!player)
                 return;
 
+            Vector3 playerPos = player.transform.position;
+
             if (zonedPlayers.TryGetValue(player.userID, out EntityZones entityZones))
             {
                 List<Zone> list = Pool.Get<List<Zone>>();
                 list.AddRange(entityZones.Zones);
-                
+
                 for (int i = list.Count - 1; i >= 0; i--)
                 {
                     Zone zone = list[i];
@@ -965,20 +990,24 @@ namespace Oxide.Plugins
 
                     if (zone.definition.Size != Vector3.zero)
                     {
-                        if (!IsInsideBounds(zone, player.transform.position))
+                        if (!IsInsideBounds(zone, playerPos))
                             OnPlayerExitZone(player, zone);
                     }
                     else
                     {
-                        if (Vector3.Distance(player.transform.position, zone.transform.position) > zone.definition.Radius)
+                        // OPT1: sqrMagnitude avoids sqrt in Vector3.Distance
+                        float r = zone.definition.Radius;
+                        if ((playerPos - zone.transform.position).sqrMagnitude > r * r)
                             OnPlayerExitZone(player, zone);
                     }
                 }
-                
+
                 Pool.FreeUnmanaged(ref list);
             }
 
-            foreach (Zone zone in zones.Values)
+            // OPT3: use spatial grid to cull candidate zones instead of iterating all zones
+            _zoneGrid.GetCandidates(playerPos, 200f, _gridCandidates);
+            foreach (Zone zone in _gridCandidates)
             {
                 if (!zone)
                     continue;
@@ -988,12 +1017,14 @@ namespace Oxide.Plugins
 
                 if (zone.definition.Size != Vector3.zero)
                 {
-                    if (IsInsideBounds(zone, player.transform.position))
+                    if (IsInsideBounds(zone, playerPos))
                         OnPlayerEnterZone(player, zone);
                 }
                 else
                 {
-                    if (Vector3.Distance(player.transform.position, zone.transform.position) <= zone.definition.Radius)
+                    // OPT1: sqrMagnitude avoids sqrt in Vector3.Distance
+                    float r = zone.definition.Radius;
+                    if ((playerPos - zone.transform.position).sqrMagnitude <= r * r)
                         OnPlayerEnterZone(player, zone);
                 }
             }
@@ -1002,7 +1033,12 @@ namespace Oxide.Plugins
                 player.SetPlayerFlag(BasePlayer.PlayerFlags.SafeZone, false);
         }
 
-        private bool IsInsideBounds(Zone zone, Vector3 worldPos) => zone?.collider?.ClosestPoint(worldPos) == worldPos;
+        // OPT5: AABB bounds.Contains is a fast early-reject; ClosestPoint only called when inside the bounding box
+        private bool IsInsideBounds(Zone zone, Vector3 worldPos)
+        {
+            if (zone?.collider == null) return false;
+            return zone.collider.bounds.Contains(worldPos) && zone.collider.ClosestPoint(worldPos) == worldPos;
+        }
         #endregion
         
         private T GetEntityComponent<T>(BaseEntity entity) where T : EntityComponentBase
@@ -1030,6 +1066,7 @@ namespace Oxide.Plugins
                 zone.InitializeZone(definition);
 
                 zones.Add(definition.Id, zone);
+                _zoneGrid.AddZone(zone); // OPT3: register in spatial grid
             }
 
             foreach (Zone zone in zones.Values)
@@ -2425,8 +2462,10 @@ namespace Oxide.Plugins
                 return false;
 
             if (zone.definition.Size != Vector3.zero)
-                return IsInsideBounds(zone, position); 
-            return Vector3.Distance(position, zone.transform.position) <= zone.definition.Radius;            
+                return IsInsideBounds(zone, position);
+            // OPT1: sqrMagnitude avoids sqrt
+            float r1 = zone.definition.Radius;
+            return (position - zone.transform.position).sqrMagnitude <= r1 * r1;
         }
         
         private bool IsPositionInAnyZone(Vector3 position)
@@ -2436,7 +2475,9 @@ namespace Oxide.Plugins
                 if (zone.Value.definition.Size != Vector3.zero && IsInsideBounds(zone.Value, position))
                     return true;
 
-                if (Vector3.Distance(position, zone.Value.transform.position) <= zone.Value.definition.Radius)
+                // OPT1: sqrMagnitude avoids sqrt
+                float r = zone.Value.definition.Radius;
+                if ((position - zone.Value.transform.position).sqrMagnitude <= r * r)
                     return true;
             }
 
@@ -2453,7 +2494,9 @@ namespace Oxide.Plugins
                     continue;
                 }
 
-                if (Vector3.Distance(position, zone.Value.transform.position) <= zone.Value.definition.Radius)
+                // OPT1: sqrMagnitude avoids sqrt
+                float r = zone.Value.definition.Radius;
+                if ((position - zone.Value.transform.position).sqrMagnitude <= r * r)
                     results.Add(zone.Key);
             }
         }
@@ -2464,7 +2507,10 @@ namespace Oxide.Plugins
             if (!zone)
                 return new List<BasePlayer>();
 
-            return new List<BasePlayer>(zone.players);
+            // OPT8: pre-sized to avoid internal resize allocations
+            var result = new List<BasePlayer>(zone.players.Count);
+            result.AddRange(zone.players);
+            return result;
         }
 
         private List<BaseEntity> GetEntitiesInZone(string zoneId)
@@ -2473,7 +2519,10 @@ namespace Oxide.Plugins
             if (!zone)
                 return new List<BaseEntity>();
 
-            return new List<BaseEntity>(zone.entities);
+            // OPT8: pre-sized to avoid internal resize allocations
+            var result = new List<BaseEntity>(zone.entities.Count);
+            result.AddRange(zone.entities);
+            return result;
         }
         
         private void GetPlayersInZoneNoAlloc(string zoneID, List<BasePlayer> list)
@@ -2518,10 +2567,12 @@ namespace Oxide.Plugins
             if (!zonedPlayers.TryGetValue(player.userID, out EntityZones entityZones))
                 return Array.Empty<string>();
 
+            // OPT2: Zones is now HashSet — use foreach instead of index
             string[] array = new string[entityZones.Zones.Count];
-            for (int i = 0; i < entityZones.Zones.Count; i++)
-                array[i] = entityZones.Zones[i].definition.Id;
-            
+            int i = 0;
+            foreach (Zone zone in entityZones.Zones)
+                array[i++] = zone.definition.Id;
+
             return array;
         }
 
@@ -2530,10 +2581,12 @@ namespace Oxide.Plugins
             if (!zonedEntities.TryGetValue(entity.net.ID, out EntityZones entityZones))
                 return Array.Empty<string>();
 
+            // OPT2: Zones is now HashSet — use foreach instead of index
             string[] array = new string[entityZones.Zones.Count];
-            for (int i = 0; i < entityZones.Zones.Count; i++)
-                array[i] = entityZones.Zones[i].definition.Id;
-            
+            int i = 0;
+            foreach (Zone zone in entityZones.Zones)
+                array[i++] = zone.definition.Id;
+
             return array;
         }
         
@@ -2586,7 +2639,9 @@ namespace Oxide.Plugins
                 if (zone.Value.definition.Size != Vector3.zero && IsInsideBounds(zone.Value, position))
                     return true;
 
-                if (Vector3.Distance(position, zone.Value.transform.position) <= zone.Value.definition.Radius)
+                // OPT1: sqrMagnitude avoids sqrt
+                float rp = zone.Value.definition.Radius;
+                if ((position - zone.Value.transform.position).sqrMagnitude <= rp * rp)
                     return true;
             }
 
@@ -2707,11 +2762,15 @@ namespace Oxide.Plugins
                 
                 zone.InitializeZone(definition);
                 update = false;
+                Instance?._zoneGrid.AddZone(zone); // OPT3: register new zone in spatial grid
             }
             else definition = zone.definition;
 
             if (definition.Owner && owner != definition.Owner)
                 return false;
+
+            if (update)
+                Instance?._zoneGrid.RemoveZone(zone); // OPT3: remove stale grid entries before update
 
             UpdateZoneDefinition(zone, args);
 
@@ -2720,6 +2779,9 @@ namespace Oxide.Plugins
 
             zone.definition = definition;
             zone.Reset();
+
+            if (update)
+                Instance?._zoneGrid.AddZone(zone); // OPT3: re-add with updated position/radius
 
             Interface.CallHook(update ? "OnZoneUpdated" : "OnZoneCreated", zoneId);
             
@@ -2773,7 +2835,8 @@ namespace Oxide.Plugins
                 return false;
 
             zones.Remove(zoneId);
-            
+            _zoneGrid.RemoveZone(zone); // OPT3: remove from spatial grid
+
             if (zoneOwner && temporaryZones.TryGetValue(zoneOwner, out HashSet<string> set))
                 set.Remove(zoneId);
 
@@ -3680,7 +3743,10 @@ namespace Oxide.Plugins
                     SendMessage(player, "You must enter a zone ID. /zone_edit <zone ID>");
                     return;
                 }
-                zoneId = entityZones.Zones[0].definition.Id;
+                // OPT2: Zones is now HashSet — use enumerator to get the single element
+                Zone singleZone = null;
+                foreach (Zone z in entityZones.Zones) { singleZone = z; break; }
+                zoneId = singleZone?.definition.Id;
             }
             else zoneId = args[0];
 
@@ -4286,21 +4352,22 @@ namespace Oxide.Plugins
         {
             public ZoneFlags Flags { get; private set; }
 
-            public List<Zone> Zones { get; private set; }
-            
+            // OPT2: HashSet<Zone> for O(1) Contains, Add, Remove vs O(n) on List
+            public HashSet<Zone> Zones { get; private set; }
+
 
             public EntityZones()
             {
-                Zones = new List<Zone>();
+                Zones = new HashSet<Zone>();
                 Flags = new ZoneFlags();
             }
 
             public void AddFlags(ZoneFlags zoneFlags) => Flags.AddFlags(zoneFlags);
-                        
+
             public void RemoveFlags(ZoneFlags zoneFlags) => Flags.RemoveFlags(zoneFlags);
-                        
+
             public bool HasFlag(int flag) => Flags.HasFlag(flag);
-            
+
             public void UpdateFlags()
             {
                 Flags.Clear();
@@ -4330,11 +4397,8 @@ namespace Oxide.Plugins
 
             public bool EnterZone(Zone zone)
             {
-                if (Zones.Contains(zone))
-                    return false;
-                
-                Zones.Add(zone);
-                return true;
+                // OPT2: HashSet.Add returns false if already present — replaces Contains+Add
+                return Zones.Add(zone);
             }
 
             public bool LeaveZone(Zone zone) => Zones.Remove(zone);
@@ -4425,6 +4489,66 @@ namespace Oxide.Plugins
             {
                 return objectType == typeof(ZoneFlags);
             }
+        }
+        #endregion
+
+        #region ZoneGrid
+        // OPT3: Simple spatial grid to cull zone candidates in UpdatePlayerZones
+        private class ZoneGrid
+        {
+            private readonly Dictionary<long, List<Zone>> _cells = new Dictionary<long, List<Zone>>();
+            private readonly float _cellSize;
+
+            public ZoneGrid(float cellSize = 50f) { _cellSize = cellSize; }
+
+            private long CellKey(int x, int z) => ((long)x << 32) | (uint)z;
+
+            private (int x, int z) WorldToCell(Vector3 pos) =>
+                ((int)Math.Floor(pos.x / _cellSize), (int)Math.Floor(pos.z / _cellSize));
+
+            public void AddZone(Zone zone)
+            {
+                var (cx, cz) = WorldToCell(zone.transform.position);
+                int radiusCells = (int)Math.Ceiling(zone.definition.Radius / _cellSize) + 1;
+                for (int x = cx - radiusCells; x <= cx + radiusCells; x++)
+                for (int z = cz - radiusCells; z <= cz + radiusCells; z++)
+                {
+                    var key = CellKey(x, z);
+                    if (!_cells.TryGetValue(key, out var list))
+                        _cells[key] = list = new List<Zone>();
+                    if (!list.Contains(zone)) list.Add(zone);
+                }
+            }
+
+            public void RemoveZone(Zone zone)
+            {
+                var (cx, cz) = WorldToCell(zone.transform.position);
+                int radiusCells = (int)Math.Ceiling(zone.definition.Radius / _cellSize) + 1;
+                for (int x = cx - radiusCells; x <= cx + radiusCells; x++)
+                for (int z = cz - radiusCells; z <= cz + radiusCells; z++)
+                {
+                    var key = CellKey(x, z);
+                    if (_cells.TryGetValue(key, out var list))
+                        list.Remove(zone);
+                }
+            }
+
+            public void GetCandidates(Vector3 pos, float searchRadius, HashSet<Zone> results)
+            {
+                results.Clear();
+                var (cx, cz) = WorldToCell(pos);
+                int radiusCells = (int)Math.Ceiling(searchRadius / _cellSize) + 1;
+                for (int x = cx - radiusCells; x <= cx + radiusCells; x++)
+                for (int z = cz - radiusCells; z <= cz + radiusCells; z++)
+                {
+                    var key = CellKey(x, z);
+                    if (_cells.TryGetValue(key, out var list))
+                        foreach (var zone in list)
+                            results.Add(zone);
+                }
+            }
+
+            public void Clear() => _cells.Clear();
         }
         #endregion
 
