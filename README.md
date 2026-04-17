@@ -270,6 +270,60 @@ Full troubleshooting: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
 
 ---
 
+## Admin Make Targets
+
+A `Makefile` is included for common server operations. All targets accept optional overrides for `KUBE_CONTEXT`, `NAMESPACE`, `RELEASE`, `RCON_HOST`, and `RCON_PORT`.
+
+Run `make help` to see all targets.
+
+### Server Lifecycle
+
+| Target | Description | Example |
+|--------|-------------|---------|
+| `make reboot` | Sends 5-minute countdown to players via RCON, saves world, restarts pod | `RCON_PASSWORD=<pw> make reboot` |
+| `make wipe` | Same countdown, deletes `.sav` files (no save), restarts pod | `RCON_PASSWORD=<pw> make wipe` |
+| `make force-restart` | Immediate pod restart — no RCON needed (use when server is hung) | `make force-restart` |
+| `make helm-upgrade` | Applies Helm chart changes without restarting players | `TAG=gamma-1714000000 make helm-upgrade` |
+
+### In-Game RCON Commands
+
+| Target | Description | Example |
+|--------|-------------|---------|
+| `make save` | Forces a `server.save` via RCON | `RCON_PASSWORD=<pw> make save` |
+| `make message` | Broadcasts an admin message to all players | `RCON_PASSWORD=<pw> MESSAGE="Server restart in 10 min" make message` |
+
+If `MESSAGE` is not set, you will be prompted interactively.
+
+### Player Management
+
+All four targets accept `PLAYER=<steamid or name>`. If not set, you will be prompted. Providing a name instead of a SteamID searches the online player list (case-insensitive substring match) and asks for confirmation before acting.
+
+| Target | Description | Example |
+|--------|-------------|---------|
+| `make ban` | Bans a player (`banid` + `server.writecfg`) | `RCON_PASSWORD=<pw> PLAYER=jim REASON="cheating" make ban` |
+| `make admin` | Grants full admin (`ownerid` + `server.writecfg`) | `RCON_PASSWORD=<pw> PLAYER=76561198000000000 make admin` |
+| `make mod` | Grants moderator (`moderatorid` + `server.writecfg`) | `RCON_PASSWORD=<pw> PLAYER=jim make mod` |
+| `make whitelist` | Grants `whitelist.allow` Oxide permission | `RCON_PASSWORD=<pw> PLAYER=jim make whitelist` |
+
+**SteamID vs name:**
+- **SteamID (17-digit)** — used directly, no confirmation prompt.
+- **Name** — searches online players, shows match + SteamID, prompts `y/N`. If multiple matches, lists them for you to pick by number. If the player is offline, they won't appear in the list — use their SteamID directly instead.
+
+### Monitoring
+
+| Target | Description | Example |
+|--------|-------------|---------|
+| `make logs` | Tails live server logs | `make logs` |
+| `make status` | Shows pod and LoadBalancer service status | `make status` |
+
+### Prerequisites
+
+- `kubectl` configured with the target cluster context
+- `python3` with `websockets` package (`pip3 install websockets`) for RCON targets
+- `helm` for `helm-upgrade`
+
+---
+
 ## Contributing
 
 Issues, feature requests, and pull requests welcome on [GitHub](https://github.com/PenguinzTech/penguin-rust-base).
