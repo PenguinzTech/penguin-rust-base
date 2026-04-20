@@ -6,6 +6,8 @@ using System.IO;
 using System.Text;
 using Oxide.Core;
 // PATCH: Fixed a.Player() method (removed in newer Oxide API) -> use a.Connection?.player as BasePlayer
+// PATCH: Fixed shell injection in Fork() — switched from bash -c interpolation to ProcessStartInfo.ArgumentList
+// PATCH: Fixed null-connection bypass in CheckPerm() — added IsClientside guard to block plugin-invoked calls
 
 namespace Oxide.Plugins
 {
@@ -101,9 +103,9 @@ namespace Oxide.Plugins
 
         bool CheckPerm(ConsoleSystem.Arg a)
         {
-            // RCON and server console have no Connection — always allow
-            if (a.Connection == null) return true;
-            var p = (BasePlayer)a.Connection?.player;
+            // Allow only true server console (no connection, not from a player invoke)
+            if (a.Connection == null && !a.IsClientside) return true;
+            var p = a.Connection?.player as BasePlayer;
             if (p != null && permission.UserHasPermission(p.UserIDString, AdminPerm)) return true;
             a.ReplyWith("No permission.");
             return false;
@@ -119,14 +121,16 @@ namespace Oxide.Plugins
 
         void Fork(string action, string name, string source)
         {
-            var src = string.IsNullOrEmpty(source) ? "" : $" '{source}'";
-            var psi = new ProcessStartInfo(
-                "/bin/bash",
-                $"-c \"/usr/local/bin/manage-plugin.sh '{action}' '{name}'{src} >>/tmp/pluginmgr.log 2>&1 &\"")
+            // Args passed directly via ArgumentList — no shell interpolation, no injection surface.
+            var psi = new ProcessStartInfo("/usr/local/bin/manage-plugin.sh")
             {
-                UseShellExecute  = false,
-                CreateNoWindow   = true
+                UseShellExecute = false,
+                CreateNoWindow  = true,
             };
+            psi.ArgumentList.Add(action);
+            psi.ArgumentList.Add(name);
+            if (!string.IsNullOrEmpty(source))
+                psi.ArgumentList.Add(source);
             Process.Start(psi);
         }
 

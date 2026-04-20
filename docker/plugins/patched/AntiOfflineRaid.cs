@@ -12,7 +12,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using UnityEngine;
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, BuildingPrivlidge→BuildingPrivilege); fixed operator precedence in null-coalescing expression (line 361); fixed ulong→string for FindAwakeOrSleeping (line 440, 674)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection, BuildingPrivlidge→BuildingPrivilege); fixed operator precedence in null-coalescing expression (line 361); fixed ulong→string for FindAwakeOrSleeping (line 440, 674); fixed OnPlayerChat hook signature (ConsoleSystem.Arg→BasePlayer+message+channel)
 
 //AntiOfflineRaid created with PluginMerge v(1.0.6.0) by MJSU @ https://github.com/dassjosh/Plugin.Merge
 namespace Oxide.Plugins
@@ -232,7 +232,7 @@ namespace Oxide.Plugins
         
         void OnLootPlayer(BasePlayer player, BasePlayer target) => UpdateLastOnline(player.userID);
         
-        void OnPlayerChat(ConsoleSystem.Arg args) => UpdateLastOnline(args.Player().userID);
+        void OnPlayerChat(BasePlayer player, string message, Chat.ChatChannel channel) => UpdateLastOnline(player.userID);
         
         void OnPlayerConnected(BasePlayer player) => UpdateLastOnline(player.userID);
         
