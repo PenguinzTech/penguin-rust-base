@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 PenguinzTech <https://penguintech.io>
 using System;
 using System.Collections.Generic;
 using Oxide.Core;
