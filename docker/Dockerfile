@@ -246,6 +246,11 @@ RUN rm -f \
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/PluginManager.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/patched/ /steamcmd/rust/oxide/plugins/
+# Pets2 is a first-party optional plugin — bake it into disabled/ so it is
+# available via RUST_PLUGINS=Pets2 but does not load on every server by default.
+RUN gzip -c /steamcmd/rust/oxide/plugins/Pets2.cs \
+        > /steamcmd/rust/oxide/plugins/disabled/Pets2.cs.gz && \
+    rm /steamcmd/rust/oxide/plugins/Pets2.cs
 
 # ─── Shared library ─────────────────────────────────────────────────────────
 # Functions sourced by start.sh, check-plugin-updates.sh, and wipe-check.sh.
