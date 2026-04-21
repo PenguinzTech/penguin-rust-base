@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoAdmin", "PenguinzTech", "2.0.0")]
+    [Info("AutoAdmin", "PenguinzPlays", "2.0.0")]
     [Description("Provisions admin group with per-plugin permissions from RUST_ADMIN_STEAMIDS env var on every boot")]
     class AutoAdmin : RustPlugin
     {

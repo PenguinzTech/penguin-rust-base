@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("SafeSpace", "PenguinzTech", "1.0.0")]
+    [Info("SafeSpace", "PenguinzPlays", "1.0.0")]
     [Description("Kid-friendly server: blocks signs, global chat, voice, and notes unless player has permission")]
     class SafeSpace : RustPlugin
     {

@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Pets2", "PenguinzTech", "1.0.0")]
+    [Info("Pets2", "PenguinzPlays", "1.0.0")]
     [Description("Tame animal companions — 1 per player, friendly to all players, command-driven attack")]
     class Pets2 : RustPlugin
     {

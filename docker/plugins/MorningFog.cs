@@ -5,7 +5,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("MorningFog", "PenguinzTech", "1.0.0")]
+    [Info("MorningFog", "PenguinzPlays", "1.0.0")]
     [Description("Applies a Gaussian bell-curve fog from 05:00–10:00 server time, peaking at 08:00")]
     class MorningFog : RustPlugin
     {
