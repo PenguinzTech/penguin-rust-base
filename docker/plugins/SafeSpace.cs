@@ -2,6 +2,7 @@
 // Copyright (C) 2026 PenguinzTech <https://penguintech.io>
 using System;
 using Oxide.Core;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
@@ -9,6 +10,8 @@ namespace Oxide.Plugins
     [Description("Kid-friendly server: blocks signs, global chat, voice, and notes unless player has permission")]
     class SafeSpace : RustPlugin
     {
+        [PluginReference] Plugin GUIAnnouncements;
+
         private const string PermSigns      = "safespace.signs";
         private const string PermGlobalChat = "safespace.globalchat";
         private const string PermVoice      = "safespace.voice";
@@ -53,6 +56,22 @@ namespace Oxide.Plugins
         void OnServerInitialized()
         {
             Puts($"SafeSpace active — Signs:{_config.BlockSigns} GlobalChat:{_config.BlockGlobalChat} Voice:{_config.BlockVoice} Notes:{_config.BlockNotes}");
+        }
+
+        // ─── Login announcement ─────────────────────────────────────────────
+        // Voice is suppressed silently (spamming a message on every voice packet
+        // is not viable), so we instead notify the player once on connect if
+        // GUIAnnouncements is present. Falls back to ChatMessage if it isn't.
+        void OnPlayerConnected(BasePlayer player)
+        {
+            if (!_config.BlockVoice) return;
+            if (permission.UserHasPermission(player.UserIDString, PermVoice)) return;
+
+            if (GUIAnnouncements != null)
+                GUIAnnouncements.Call("CreateAnnouncement",
+                    "Voice chat is disabled on this server.", "grey", "white", player);
+            else
+                player.ChatMessage("[SafeSpace] Voice chat is disabled on this server.");
         }
 
         // ─── Signs / photo frames ───────────────────────────────────────────

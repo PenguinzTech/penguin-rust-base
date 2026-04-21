@@ -102,7 +102,7 @@ Kid-friendly server mode. Blocks four communication vectors unless a player has 
 |---|---|---|
 | Sign / photo frame painting | `safespace.signs` | `OnSignUpdate` |
 | Global chat | `safespace.globalchat` | `OnPlayerChat` (blocks Global channel only; team/local/clan unaffected) |
-| Voice chat | `safespace.voice` | `OnPlayerVoice` |
+| Voice chat | `safespace.voice` | `OnPlayerVoice` — suppressed silently; player is notified once on connect via GUIAnnouncements if present, otherwise `ChatMessage` |
 | Notes (written text on note items) | `safespace.notes` | `OnItemAction`, `OnPlayerLootEnd`, `OnItemAddedToContainer` |
 
 **Note blocking caveat:** Oxide has no pre-hook for in-game note editing (it's a client-side UI). SafeSpace instead clears `item.text` on item actions, loot-end events, and inventory additions — so anything written by an unauthorized player is wiped before it can be shared. This is a best-effort approach.
