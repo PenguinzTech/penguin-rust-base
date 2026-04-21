@@ -92,11 +92,10 @@ namespace Oxide.Plugins
         // ─── Global chat ────────────────────────────────────────────────────
         // Fires before a chat message is broadcast. Only blocks Global channel;
         // Team, Local, Cards, and Clan channels are always allowed.
-        private object OnPlayerChat(BasePlayer player, string message,
-            Chat.ChatChannel channel)
+        private object OnPlayerChat(BasePlayer player, string message, int channel)
         {
             if (!_config.BlockGlobalChat) return null;
-            if (channel != Chat.ChatChannel.Global) return null;
+            if (channel != 0) return null; // 0 = Chat.ChatChannel.Global
             if (permission.UserHasPermission(player.UserIDString, PermGlobalChat))
                 return null;
 

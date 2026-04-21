@@ -376,19 +376,17 @@ _download_and_activate() {
 activate_plugin() {
     local slug="$1"
 
-    # ── patched/ always wins ──────────────────────────────────────────────────
-    # Pre-patched .cs files take priority over every fetch path (baked, GitHub,
-    # umod). Checked unconditionally here so that plugins without a .hash entry
-    # in disabled/ don't fall through to the umod fallback and create a second
-    # conflicting .cs file alongside the one start-wrapper.sh already placed.
-    local patched_file
-    patched_file=$(find "${OXIDE_PLUGINS_DIR}/patched" -maxdepth 1 -iname "${slug}*.cs" \
+    # ── plugins already in root always win ───────────────────────────────────
+    # The Dockerfile COPYs plugins/patched/ contents directly into the Oxide
+    # plugins root (not into a patched/ subdir), so those files are always
+    # active. If the slug already resolves to a file in the root, return early
+    # to prevent the umod fallback from downloading a second conflicting copy
+    # (e.g. VehicleLicence.cs vs VehicleLicense.cs).
+    local root_file
+    root_file=$(find "${OXIDE_PLUGINS_DIR}" -maxdepth 1 -iname "${slug}*.cs" \
         2>/dev/null | head -1 || true)
-    if [ -n "${patched_file}" ]; then
-        local cs_name
-        cs_name=$(basename "${patched_file}")
-        cp --preserve=mode "${patched_file}" "${OXIDE_PLUGINS_DIR}/${cs_name}"
-        echo "[startup] activated (patched): ${cs_name}"
+    if [ -n "${root_file}" ]; then
+        echo "[startup] activated (baked-root): $(basename "${root_file}")"
         return 0
     fi
 

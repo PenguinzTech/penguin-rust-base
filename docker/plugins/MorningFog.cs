@@ -54,7 +54,7 @@ namespace Oxide.Plugins
             SetFogDensity(0f);
         }
 
-        private static readonly Random _rng = new Random();
+        private static readonly System.Random _rng = new System.Random();
 
         private void CheckAndApplyFog()
         {
