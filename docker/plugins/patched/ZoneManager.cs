@@ -1,5 +1,6 @@
 // PATCHED by penguin-rust-base: fixed removed Oxide APIs (arg.Player()→arg.Connection?.player, userID.Get()→userID)
 // PATCHED by penguin-rust-base: performance opts: sqrMagnitude, HashSet<Zone> EntityZones, ZoneGrid spatial index, HashSet queue dedup, bounds pre-check, cast not GetComponent, List capacity hints
+// PATCHED by penguin-rust-base: CanCraft ItemCrafter as BasePlayer->GetComponent<BasePlayer>() (no inheritance relationship)
 
 ﻿using Facepunch;
 using Newtonsoft.Json;
@@ -660,8 +661,7 @@ namespace Oxide.Plugins
 
         private object CanCraft(ItemCrafter itemCrafter, ItemBlueprint bp, int amount)
         {
-            // OPT7: IItemCrafter is always BasePlayer here; direct cast avoids GetComponent overhead
-            BasePlayer player = itemCrafter as BasePlayer;
+            BasePlayer player = itemCrafter.GetComponent<BasePlayer>();
             if (player && HasPlayerFlag(player, ZoneFlags.NoCraft))
             {
                 SendMessage(player, Message("noCraft", player.UserIDString));

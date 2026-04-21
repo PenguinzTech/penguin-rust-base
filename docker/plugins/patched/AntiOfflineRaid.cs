@@ -1,3 +1,4 @@
+// PATCHED by penguin-rust-base: Chat.ChatChannel->int in OnPlayerChat hook (type unresolvable in current Oxide build)
 #define DEBUG
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -232,7 +233,7 @@ namespace Oxide.Plugins
         
         void OnLootPlayer(BasePlayer player, BasePlayer target) => UpdateLastOnline(player.userID);
         
-        void OnPlayerChat(BasePlayer player, string message, Chat.ChatChannel channel) => UpdateLastOnline(player.userID);
+        void OnPlayerChat(BasePlayer player, string message, int channel) => UpdateLastOnline(player.userID);
         
         void OnPlayerConnected(BasePlayer player) => UpdateLastOnline(player.userID);
         

@@ -1,3 +1,4 @@
+// PATCHED by penguin-rust-base: authLevel ?? precedence fix (uint? ?? bool invalid); FindAwakeOrSleeping signature fixes
 //#define DEBUG
 using Facepunch;
 using Network;
@@ -8169,11 +8170,11 @@ namespace Oxide.Plugins
                 return !player.IsSleeping();
             }
 
-            if (player.net?.connection?.authLevel ?? 0 == 1)
+            if ((player.net?.connection?.authLevel ?? 0) == 1)
             {
                 return config.Admin.UseableByModerators;
             }
-            else if (player.net?.connection?.authLevel ?? 0 >= 2)
+            else if ((player.net?.connection?.authLevel ?? 0) >= 2)
             {
                 return config.Admin.UseableByAdmins;
             }

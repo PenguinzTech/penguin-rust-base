@@ -3347,7 +3347,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.metabolism.Reset();
+                BasePlayer.FindAwakeOrSleeping(targetId.ToString())?.metabolism.Reset();
                 LogInfo($"{aPlayer.Name}: Reset the metabolism of user ID {targetId}");
             } else {
                 BasePlayer player = BasePlayer.Find(aPlayer.Id);
@@ -3360,7 +3360,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.metabolism.Reset();
+                BasePlayer.FindAwakeOrSleeping(targetId.ToString())?.metabolism.Reset();
                 LogInfo($"{player.displayName}: Reset the metabolism of user ID {targetId}");
                 timer.Once(0.01f, () => BuildUI(player, UiPage.PlayerPage, targetId.ToString()));
             }
