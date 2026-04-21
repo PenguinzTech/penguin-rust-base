@@ -54,7 +54,7 @@ These plugins are baked into the image as-is from their original published relea
 | Plugin | Description |
 |---|---|
 | **AutoAdmin** | Provisions Oxide permissions and admin groups from environment variables on startup |
-| **PluginManager** | Runtime add/remove/update/list for Oxide plugins via console and chat |
+| **ExtensionManager** | Runtime add/remove/update/list for Oxide plugins via console and chat |
 
 ---
 

@@ -1,4 +1,4 @@
-# Plugin Manager
+# Extension Manager
 
 Runtime plugin management for live Rust servers — activate, deactivate, and update Oxide plugins without restarts using in-game chat, F1 console, or RCON.
 
@@ -8,18 +8,18 @@ Runtime plugin management for live Rust servers — activate, deactivate, and up
 
 | Command | Arguments | Description |
 |---|---|---|
-| `/plugin list` | — | List enabled, patched-available, and disabled plugins |
-| `/plugin add <name> [source]` | name, optional source | Activate a plugin |
-| `/plugin remove <name>` | name | Deactivate a running plugin |
-| `/plugin update <name> [source]` | name, optional source | Re-fetch and hot-reload a plugin |
+| `/extension list` | — | List enabled, patched-available, and disabled plugins |
+| `/extension add <name> [source]` | name, optional source | Activate a plugin |
+| `/extension remove <name>` | name | Deactivate a running plugin |
+| `/extension update <name> [source]` | name, optional source | Re-fetch and hot-reload a plugin |
 
 Console / RCON equivalents use dots:
 
 ```
-plugin.list
-plugin.add TruePVE
-plugin.remove TruePVE
-plugin.update TruePVE github
+extension.list
+extension.add TruePVE
+extension.remove TruePVE
+extension.update TruePVE github
 ```
 
 `<name>` is the plugin filename without `.cs` (case-insensitive for lookup, original case preserved on disk).
@@ -28,13 +28,13 @@ plugin.update TruePVE github
 
 ## Permission
 
-All commands require the `pluginmanager.admin` Oxide permission.
+All commands require the `extensionmanager.admin` Oxide permission.
 
 Grant to a player:
 
 ```
-oxide.grant user <steamid> pluginmanager.admin
-oxide.grant group admin pluginmanager.admin
+oxide.grant user <steamid> extensionmanager.admin
+oxide.grant group admin extensionmanager.admin
 ```
 
 RCON and the server console bypass this check — they are already authenticated.
@@ -63,18 +63,18 @@ The `[source]` argument controls where `add` and `update` fetch plugins from.
 
 ## How It Works
 
-`PluginManager.cs` (Oxide plugin) handles permission checks and input validation, then immediately delegates all disk and network operations to `manage-plugin.sh` via a background bash fork:
+`ExtensionManager.cs` (Oxide plugin) handles permission checks and input validation, then immediately delegates all disk and network operations to `manage-plugin.sh` via a background bash fork:
 
 ```
-/plugin add TruePVE
-  → PluginManager.cs validates name ([A-Za-z0-9_-], max 64 chars)
-  → Process.Start("/bin/bash", "manage-plugin.sh 'add' 'TruePVE' >>/tmp/pluginmgr.log 2>&1 &")
+/extension add TruePVE
+  → ExtensionManager.cs validates name ([A-Za-z0-9_-], max 64 chars)
+  → Process.Start("/usr/local/bin/manage-plugin.sh", ["add", "TruePVE"])
   → Returns immediately — game loop never blocks
   → manage-plugin.sh runs in background
-  → Sends "say [PluginManager] TruePVE added — Oxide loading..." via RCON when done
+  → Sends "say [ExtensionManager] TruePVE added — Oxide loading..." via RCON when done
 ```
 
-`plugin.list` is synchronous (filesystem scan, ~1ms) and never forks.
+`extension.list` is synchronous (filesystem scan, ~1ms) and never forks.
 
 ---
 

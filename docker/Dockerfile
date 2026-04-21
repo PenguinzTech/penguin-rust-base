@@ -236,7 +236,7 @@ RUN rm -f \
 # AutoAdmin and PluginManager are always-on built-ins — copied directly into
 # oxide/plugins/ so they load on every server unconditionally.
 #   AutoAdmin    — auto-provisions admin group permissions from RUST_ADMIN_STEAMIDS
-#   PluginManager — runtime /plugin and plugin.{add,remove,update,list} commands
+#   ExtensionManager — runtime /extension and extension.{add,remove,update,list} commands
 #
 # plugins/patched/ — upstream umod plugins with removed Oxide API fixes applied:
 #   FindByID→FindAwakeOrSleeping, net.connection→Connection,
@@ -246,7 +246,7 @@ RUN rm -f \
 # instead so servers get working patched versions. Oxide only scans oxide/plugins/
 # root — subdirectories are ignored, so patched plugins are copied to root.
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
-COPY --chown=rustserver:rustserver plugins/PluginManager.cs /steamcmd/rust/oxide/plugins/
+COPY --chown=rustserver:rustserver plugins/ExtensionManager.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/patched/ /steamcmd/rust/oxide/plugins/
 # First-party optional plugins — bake into disabled/ with hash sidecars so
 # activate_plugin can find them via RUST_PLUGINS without falling through to

@@ -33,9 +33,9 @@ Provisions the `admin` Oxide group with the correct per-plugin permissions on ev
 
 ---
 
-### PluginManager
+### ExtensionManager
 
-**File:** `docker/plugins/PluginManager.cs`  
+**File:** `docker/plugins/ExtensionManager.cs`  
 **Version:** 1.0.0
 
 Exposes runtime plugin management via console and chat without a server restart. Delegates actual file operations to `/usr/local/bin/manage-plugin.sh`.
@@ -44,13 +44,13 @@ Exposes runtime plugin management via console and chat without a server restart.
 
 | Command | Description |
 |---|---|
-| `plugin.add <name> [source]` | F1/RCON: download and activate a plugin |
-| `plugin.remove <name>` | F1/RCON: deactivate and remove a plugin |
-| `plugin.update <name> [source]` | F1/RCON: re-download and reload a plugin |
-| `plugin.list` | F1/RCON: list enabled, patched-available, and disabled plugins |
-| `/plugin <sub> [name] [source]` | In-game chat equivalent (requires `pluginmanager.admin`) |
+| `extension.add <name> [source]` | F1/RCON: download and activate a plugin |
+| `extension.remove <name>` | F1/RCON: deactivate and remove a plugin |
+| `extension.update <name> [source]` | F1/RCON: re-download and reload a plugin |
+| `extension.list` | F1/RCON: list enabled, patched-available, and disabled plugins |
+| `/plugin <sub> [name] [source]` | In-game chat equivalent (requires `extensionmanager.admin`) |
 
-**Permissions:** `pluginmanager.admin`
+**Permissions:** `extensionmanager.admin`
 
 **Security hardening (baked into original implementation):**
 

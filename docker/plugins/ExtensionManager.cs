@@ -5,43 +5,40 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using Oxide.Core;
-// PATCH: Fixed a.Player() method (removed in newer Oxide API) -> use a.Connection?.player as BasePlayer
-// PATCH: Fixed shell injection in Fork() — switched from bash -c interpolation to ProcessStartInfo.ArgumentList
-// PATCH: Fixed null-connection bypass in CheckPerm() — added IsClientside guard to block plugin-invoked calls
 
 namespace Oxide.Plugins
 {
-    [Info("PluginManager", "PenguinzTech", "1.0.0")]
+    [Info("ExtensionManager", "PenguinzPlays", "1.0.0")]
     [Description("Runtime plugin add/remove/update/list via console and chat")]
-    class PluginManager : RustPlugin
+    class ExtensionManager : RustPlugin
     {
-        private const string AdminPerm = "pluginmanager.admin";
+        private const string AdminPerm = "extensionmanager.admin";
         private static readonly string PluginsDir = "/steamcmd/rust/oxide/plugins";
 
         void Init() => permission.RegisterPermission(AdminPerm, this);
 
         // ── Console commands ──────────────────────────────────────────────────
 
-        [ConsoleCommand("plugin.add")]
+        [ConsoleCommand("extension.add")]
         void CcAdd(ConsoleSystem.Arg a) => RunMutating(a, "add");
 
-        [ConsoleCommand("plugin.remove")]
+        [ConsoleCommand("extension.remove")]
         void CcRemove(ConsoleSystem.Arg a) => RunMutating(a, "remove");
 
-        [ConsoleCommand("plugin.update")]
+        [ConsoleCommand("extension.update")]
         void CcUpdate(ConsoleSystem.Arg a) => RunMutating(a, "update");
 
-        [ConsoleCommand("plugin.list")]
+        [ConsoleCommand("extension.list")]
         void CcList(ConsoleSystem.Arg a)
         {
             if (!CheckPerm(a)) return;
             a.ReplyWith(BuildList());
         }
 
-        // ── Chat command: /plugin <sub> [name] [source] ───────────────────────
+        // ── Chat command: /extension <sub> [name] [source] ───────────────────
 
-        [ChatCommand("plugin")]
-        void ChatPlugin(BasePlayer p, string _, string[] args)
+        [ChatCommand("extension")]
+        void ChatExtension(BasePlayer p, string _, string[] args)
         {
             if (!permission.UserHasPermission(p.UserIDString, AdminPerm))
             {
@@ -51,7 +48,7 @@ namespace Oxide.Plugins
 
             if (args.Length == 0)
             {
-                SendReply(p, "Usage: /plugin <add|remove|update|list> [name] [source]");
+                SendReply(p, "Usage: /extension <add|remove|update|list> [name] [source]");
                 return;
             }
 
@@ -64,7 +61,7 @@ namespace Oxide.Plugins
 
             if (args.Length < 2)
             {
-                SendReply(p, "Usage: /plugin " + sub + " <name> [source]");
+                SendReply(p, "Usage: /extension " + sub + " <name> [source]");
                 return;
             }
 
@@ -77,7 +74,7 @@ namespace Oxide.Plugins
             }
 
             Fork(sub, name, source);
-            SendReply(p, $"[PluginManager] {sub} job started for {name}. Watch console for result.");
+            SendReply(p, $"[ExtensionManager] {sub} job started for {name}. Watch console for result.");
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
@@ -89,7 +86,7 @@ namespace Oxide.Plugins
             var source = a.GetString(1, "");
             if (string.IsNullOrEmpty(name))
             {
-                a.ReplyWith("Usage: plugin." + action + " <name> [source]");
+                a.ReplyWith("Usage: extension." + action + " <name> [source]");
                 return;
             }
             if (!IsValidName(name))
@@ -98,7 +95,7 @@ namespace Oxide.Plugins
                 return;
             }
             Fork(action, name, source);
-            a.ReplyWith($"[PluginManager] {action} job started for {name}.");
+            a.ReplyWith($"[ExtensionManager] {action} job started for {name}.");
         }
 
         bool CheckPerm(ConsoleSystem.Arg a)
