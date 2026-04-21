@@ -10,3 +10,5 @@ ghcr.io/penguinztech/<image>:<tag>
 ```
 
 Never use `ghcr.io/penguintechinc/...` in this repo — that is incorrect and will cause image pull failures.
+
+skill for oxide and/or rust plugins is in ./skills
