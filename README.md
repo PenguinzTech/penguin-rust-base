@@ -1,3 +1,5 @@
+![copyright 2026 Penguinz](rust-penguinz-logo-bg.png)
+
 # penguin-rust-base
 
 [![GHCR](https://img.shields.io/badge/ghcr.io-penguin--rust--base-blue)](https://github.com/PenguinzTech/penguin-rust-base/pkgs/container/penguin-rust-base)
@@ -17,21 +19,11 @@ Perfect for operators, communities, and teams extending with proprietary plugins
 
 - **Rust Dedicated Server** — Steam app 258550, latest version
 - **Oxide Mod Framework** — Auto-updated every 4 hours
-- **Pre-Installed Plugins** — all plugins published to [penguin-rust-plugins](https://github.com/PenguinzTech/penguin-rust-plugins) are automatically baked in on every image build (no static list to maintain):
-  - **AdminUtilities** — Admin commands (noclip, god mode, kick, ban, give, spawn)
-  - **BGrade** — Automatically upgrade building grades
-  - **CopyPaste** — Copy and paste buildings
-  - **Vanish** — Admin invisibility toggle
-  - **RemoverTool** — Remove placed objects
-  - **UnburnableMeat** — Prevents cooked meat from burning
-  - **VehicleDecayProtection** — Per-vehicle decay protection permissions
-  - **NightLantern** — Auto-lights fires/lanterns at night
-  - **TruePVE** — PvE protection rules
-  - **StackSizeController** — Customize item stack sizes
-  - **Whitelist** — Restrict server access to whitelisted players
-- **AutoAdmin Plugin** — Custom PenguinzTech plugin that auto-grants all baked and patched plugin permissions to admins on every boot via `RUST_ADMIN_STEAMIDS`; also fires on plugin hot-reload so no manual `oxide.grant` calls are needed
-- **PluginManager Plugin** — Runtime `/plugin add|remove|update|list` commands; manage plugins live without a restart (see [docs/plugin-manager.md](docs/plugin-manager.md))
-- **Patched Community Plugins** — 10 popular community plugins pre-patched for Oxide API compatibility (removed APIs replaced so they work on current Rust builds): AntiOfflineRaid, BetterChat, BetterChatMute, DynamicPVP, NTeleportation, PlayerAdministration, Quests, TreePlanter, VehicleLicence, ZoneManager — see [docs/ACKNOWLEDGEMENTS.md](docs/ACKNOWLEDGEMENTS.md)
+- **Pre-Installed Plugins** — all plugins published to [penguin-rust-plugins](https://github.com/PenguinzTech/penguin-rust-plugins) (upstream secure plugin cache) are automatically baked in on every image build — no static list to maintain: AdminUtilities, BGrade, CopyPaste, Vanish, RemoverTool, UnburnableMeat, VehicleDecayProtection, NightLantern, TruePVE, StackSizeController, Whitelist
+- **Custom Plugins (always active)** — AutoAdmin, PluginManager
+- **Custom Plugins (opt-in)** — MorningFog (morning fog bell-curve effect), SafeSpace (kid-friendly content filters), Pets2 (tame animal companions) — enable via e.g. `RUST_PLUGINS=morningfog,safespace`
+- **Patched Community Plugins** — 11 popular community plugins pre-patched for Oxide API compatibility (removed APIs replaced so they work on current Rust builds): AntiOfflineRaid, BetterChat, BetterChatMute, DynamicPVP, NTeleportation, PlayerAdministration, Quests, TreePlanter, VehicleLicence, ZoneManager (+ 8 perf optimisations), Pets2 — see [docs/PLUGINS.md](docs/PLUGINS.md) and [docs/ACKNOWLEDGEMENTS.md](docs/ACKNOWLEDGEMENTS.md)
+- **MySQL→RCON User Sync** — opt-in `user-sync.sh` runs every 5 minutes via supercronic; syncs admins, moderators, and bans from a `rust_users` MySQL table to the live server via RCON. Activated by setting `USER_SYNC_DB_HOST`, `USER_SYNC_DB_USER`, `USER_SYNC_DB_PASS`, and `USER_SYNC_DB`. No-op when env vars are absent.
 - **WAF Sidecar** — Go-based network-layer firewall that protects the game server from DDoS floods, cheater reconnect storms, RCON brute-force, and packet anomalies — **works in pure vanilla mode** with no Oxide required (see [docs/waf.md](docs/waf.md))
 - **Auto-Configuration** — First-boot tuning of `worldSize`/`maxPlayers` based on available CPU/RAM
 - **Wipe Scheduler** — Configurable map wipes with in-game RCON warnings (60-minute lead time)
@@ -315,6 +307,7 @@ All four targets accept `PLAYER=<steamid or name>`. If not set, you will be prom
 |--------|-------------|---------|
 | `make logs` | Tails live server logs | `make logs` |
 | `make status` | Shows pod and LoadBalancer service status | `make status` |
+| `make fps` | Queries current server FPS via RCON | `RCON_PASSWORD=<pw> make fps` |
 
 ### Prerequisites
 
@@ -332,8 +325,8 @@ Issues, feature requests, and pull requests welcome on [GitHub](https://github.c
 
 ## License
 
-- **Container image:** MIT License
-- **Bundled plugins:** Their respective authors' licenses (see [umod.org](https://umod.org))
+- **Container image and custom plugins:** [GPL-3.0-only](LICENSE)
+- **Bundled community plugins:** Their respective authors' licenses (see [umod.org](https://umod.org))
 - **Rust / Steam:** Licensed by Facepunch Studios — by using this image you agree to the [Rust Server License](https://www.rust.facepunch.com/)
 
 ---

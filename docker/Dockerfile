@@ -233,8 +233,10 @@ RUN rm -f \
     /steamcmd/rust/oxide/plugins/disabled/RustKits.cs.gz
 
 # ─── Built-in plugins ────────────────────────────────────────────────────────
-# AutoAdmin is baked into the base image so every downstream image gets
-# automatic permission provisioning and admin group management.
+# AutoAdmin and PluginManager are always-on built-ins — copied directly into
+# oxide/plugins/ so they load on every server unconditionally.
+#   AutoAdmin    — auto-provisions admin group permissions from RUST_ADMIN_STEAMIDS
+#   PluginManager — runtime /plugin and plugin.{add,remove,update,list} commands
 #
 # plugins/patched/ — upstream umod plugins with removed Oxide API fixes applied:
 #   FindByID→FindAwakeOrSleeping, net.connection→Connection,
@@ -246,11 +248,21 @@ RUN rm -f \
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/PluginManager.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/patched/ /steamcmd/rust/oxide/plugins/
-# Pets2 is a first-party optional plugin — bake it into disabled/ so it is
-# available via RUST_PLUGINS=Pets2 but does not load on every server by default.
-RUN gzip -c /steamcmd/rust/oxide/plugins/Pets2.cs \
-        > /steamcmd/rust/oxide/plugins/disabled/Pets2.cs.gz && \
-    rm /steamcmd/rust/oxide/plugins/Pets2.cs
+# First-party optional plugins — bake into disabled/ with hash sidecars so
+# activate_plugin can find them via RUST_PLUGINS without falling through to
+# the GitHub/umod fetch path (which would fail for plugins not in any registry).
+# Hash slug is lowercase to match the activate_plugin lookup key.
+COPY --chown=rustserver:rustserver plugins/MorningFog.cs plugins/SafeSpace.cs /tmp/firstparty/
+RUN cd /tmp/firstparty && \
+    sha256sum MorningFog.cs > /steamcmd/rust/oxide/plugins/disabled/morningfog.hash && \
+    gzip -c MorningFog.cs  > /steamcmd/rust/oxide/plugins/disabled/MorningFog.cs.gz && \
+    sha256sum SafeSpace.cs  > /steamcmd/rust/oxide/plugins/disabled/safespace.hash && \
+    gzip -c SafeSpace.cs   > /steamcmd/rust/oxide/plugins/disabled/SafeSpace.cs.gz && \
+    rm -rf /tmp/firstparty
+RUN cd /steamcmd/rust/oxide/plugins && \
+    sha256sum Pets2.cs > disabled/pets2.hash && \
+    gzip -c Pets2.cs  > disabled/Pets2.cs.gz && \
+    rm Pets2.cs
 
 # ─── Shared library ─────────────────────────────────────────────────────────
 # Functions sourced by start.sh, check-plugin-updates.sh, and wipe-check.sh.
