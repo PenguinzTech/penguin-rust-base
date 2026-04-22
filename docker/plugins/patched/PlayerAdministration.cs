@@ -1,4 +1,4 @@
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection); converted ulong to string for FindAwakeOrSleeping/FindSleeping calls
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID→FindAwakeOrSleeping, net.connection→Connection); converted ALL ulong targetId usages to .ToString() for FindAwakeOrSleeping/FindSleeping
 /* --- Contributor information ---
  * Please follow the following set of guidelines when working on this plugin,
  * this to help others understand this file more easily.
@@ -3382,7 +3382,7 @@ namespace Oxide.Plugins
                     return;
             }
 
-            PlayerMetabolism playerState = (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.metabolism;
+            PlayerMetabolism playerState = (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.metabolism;
             playerState.bleeding.value = playerState.bleeding.min;
             playerState.calories.value = playerState.calories.max;
             playerState.comfort.value = 0;
@@ -3411,7 +3411,7 @@ namespace Oxide.Plugins
             if (aPlayer.IsServer || !VerifyPermission(ref player, CPermTeleport, true) || !GetTargetFromArg(aArgs, out targetId))
                 return;
 
-            BasePlayer targetPlayer = BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId);
+            BasePlayer targetPlayer = BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString());
 
             if (player.IsAlive() && targetPlayer.IsAlive()) {
                 player.Teleport(targetPlayer); //.Teleport(targetPlayer.transform.position); // Let uMod decide what's best
@@ -3435,7 +3435,7 @@ namespace Oxide.Plugins
             if (!VerifyPermission(ref player, CPermTeleport, true) || !GetTargetFromArg(aArgs, out targetId))
                 return;
 
-            BasePlayer targetPlayer = BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId);
+            BasePlayer targetPlayer = BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString());
 
             if (player.IsAlive() && targetPlayer.IsAlive()) {
                 targetPlayer.Teleport(player); //.Teleport(player.transform.position); // Let uMod decide what's best
@@ -3503,7 +3503,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.Hurt(amount);
+                (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.Hurt(amount);
                 LogInfo($"{aPlayer.Name}: Hurt user ID {targetId} for {amount} points");
             } else {
                 BasePlayer player = BasePlayer.Find(aPlayer.Id);
@@ -3516,7 +3516,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.Hurt(amount);
+                (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.Hurt(amount);
                 LogInfo($"{player.displayName}: Hurt user ID {targetId} for {amount} points");
                 timer.Once(0.01f, () => BuildUI(player, UiPage.PlayerPage, targetId.ToString()));
             }
@@ -3536,7 +3536,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.Die();
+                (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.Die();
                 LogInfo($"{aPlayer.Name}: Killed user ID {targetId}");
             } else {
                 BasePlayer player = BasePlayer.Find(aPlayer.Id);
@@ -3549,7 +3549,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                (BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId))?.Die();
+                (BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString()))?.Die();
                 LogInfo($"{player.displayName}: Killed user ID {targetId}");
                 timer.Once(0.01f, () => BuildUI(player, UiPage.PlayerPage, targetId.ToString()));
             }
@@ -3564,7 +3564,7 @@ namespace Oxide.Plugins
             if (!GetTargetAmountFromArg(aArgs, out targetId, out amount))
                 return;
 
-            BasePlayer targetPlayer = BasePlayer.FindAwakeOrSleeping(targetId) ?? BasePlayer.FindSleeping(targetId);
+            BasePlayer targetPlayer = BasePlayer.FindAwakeOrSleeping(targetId.ToString()) ?? BasePlayer.FindSleeping(targetId.ToString());
 
             if (aPlayer.IsServer) {
                 if (targetPlayer.IsWounded())

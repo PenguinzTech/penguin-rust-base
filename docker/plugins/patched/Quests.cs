@@ -12,7 +12,7 @@ using UnityEngine;
 // ToDo: ZLevels integration (waiting for ZLevels api implementation)
 // ToDo: Add Cooldown option for Delivery
 
-// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID->FindAwakeOrSleeping); converted ulong to string for FindAwakeOrSleeping call (line 348)
+// PATCHED by penguin-rust-base: fixed removed Oxide APIs (FindByID->FindAwakeOrSleeping); pass string IDs directly to FindAwakeOrSleeping (remove ulong.Parse() wrapping)
 namespace Oxide.Plugins
 {
     [Info("Quests", "Gonzi", "2.4.4")]
@@ -1123,7 +1123,7 @@ namespace Oxide.Plugins
             {
                 if (Creator.type == QuestType.Delivery)
                 {
-                    var npc = BasePlayer.FindAwakeOrSleeping(ulong.Parse(Creator.deliveryInfo.Info.ID));
+                    var npc = BasePlayer.FindAwakeOrSleeping(Creator.deliveryInfo.Info.ID);
                     if (npc != null)
                     {
                         npc.displayName = Creator.deliveryInfo.Info.Name;
@@ -1305,7 +1305,7 @@ namespace Oxide.Plugins
         {
             foreach (var npc in vendors.DeliveryVendors)
             {
-                var player = BasePlayer.FindAwakeOrSleeping(ulong.Parse(npc.Key));
+                var player = BasePlayer.FindAwakeOrSleeping(npc.Key);
                 if (player != null)
                 {
                     player.displayName = npc.Value.Info.Name;
@@ -1314,7 +1314,7 @@ namespace Oxide.Plugins
 
             foreach (var npc in vendors.QuestVendors)
             {
-                var player = BasePlayer.FindAwakeOrSleeping(ulong.Parse(npc.Key));
+                var player = BasePlayer.FindAwakeOrSleeping(npc.Key);
                 if (player != null)
                 {
                     player.displayName = npc.Value.Name;
