@@ -111,6 +111,10 @@ namespace Oxide.Plugins
             },
             ["Quests"] = new[] { "quests.manage", "quests.use" },
             ["TreePlanter"] = new[] { "treeplanter.use", "treeplanter.menu" },
+            ["ServerPerf"] = new[] { "serverperf.use" },
+            ["ScientistManager"] = new[] { "scientistmanager.admin" },
+            ["ExtensionManager"] = new[] { "extensionmanager.admin" },
+            ["SafeSpace"] = new[] { "safespace.signs", "safespace.globalchat", "safespace.voice", "safespace.notes" },
         };
 
         // Plugins whose permissions are generated at runtime from config files

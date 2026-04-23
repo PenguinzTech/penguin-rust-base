@@ -9,6 +9,7 @@
 # Only acts when PLUGIN_SOURCE=github and an update exists.
 */5 * * * * /usr/local/bin/check-plugin-updates.sh
 */5 * * * * /usr/local/bin/user-sync.sh
+*/5 * * * * /usr/local/bin/perf-sample.sh
 
 # ─── Log cleanup ─────────────────────────────────────────────────────────────
 # Compress logs older than 24h; delete logs older than 7 days.

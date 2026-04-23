@@ -234,10 +234,10 @@ RUN rm -f \
     /steamcmd/rust/oxide/plugins/disabled/RustKits.cs.gz
 
 # ─── Built-in plugins ────────────────────────────────────────────────────────
-# AutoAdmin and PluginManager are always-on built-ins — copied directly into
-# oxide/plugins/ so they load on every server unconditionally.
-#   AutoAdmin    — auto-provisions admin group permissions from RUST_ADMIN_STEAMIDS
+# Always-on built-in plugins — copied directly into oxide/plugins/ unconditionally.
+#   AutoAdmin        — auto-provisions admin group permissions from RUST_ADMIN_STEAMIDS
 #   ExtensionManager — runtime /extension and extension.{add,remove,update,list} commands
+#   ServerPerf       — server.performance F1 console command; reads perf-sample.sh CSV
 #
 # plugins/patched/ — upstream umod plugins with removed Oxide API fixes applied:
 #   FindByID→FindAwakeOrSleeping, net.connection→Connection,
@@ -248,6 +248,7 @@ RUN rm -f \
 # root — subdirectories are ignored, so patched plugins are copied to root.
 COPY --chown=rustserver:rustserver plugins/AutoAdmin.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/ExtensionManager.cs /steamcmd/rust/oxide/plugins/
+COPY --chown=rustserver:rustserver plugins/ServerPerf.cs /steamcmd/rust/oxide/plugins/
 COPY --chown=rustserver:rustserver plugins/patched/ /steamcmd/rust/oxide/plugins/
 # First-party optional plugins — bake into disabled/ with hash sidecars so
 # activate_plugin can find them via RUST_PLUGINS without falling through to
@@ -278,9 +279,10 @@ COPY --chown=rustserver:rustserver wipe-check.sh /usr/local/bin/wipe-check.sh
 COPY --chown=rustserver:rustserver manage-plugin.sh /usr/local/bin/manage-plugin.sh
 COPY --chown=rustserver:rustserver user-sync.sh /usr/local/bin/user-sync.sh
 COPY --chown=rustserver:rustserver log-cleanup.sh /usr/local/bin/log-cleanup.sh
+COPY --chown=rustserver:rustserver perf-sample.sh /usr/local/bin/perf-sample.sh
 RUN chmod +x /usr/local/bin/check-plugin-updates.sh /usr/local/bin/wipe-check.sh \
              /usr/local/bin/manage-plugin.sh /usr/local/bin/user-sync.sh \
-             /usr/local/bin/log-cleanup.sh
+             /usr/local/bin/log-cleanup.sh /usr/local/bin/perf-sample.sh
 
 # ─── Startup script ──────────────────────────────────────────────────────────
 COPY --chown=rustserver:rustserver start.sh /start.sh
