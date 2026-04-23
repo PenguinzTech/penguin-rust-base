@@ -116,6 +116,7 @@ RUN dpkg --add-architecture i386 && \
         iptables \
         jq \
         lib32gcc-s1 \
+        libgdiplus \
         numactl \
         procps \
         unzip \
