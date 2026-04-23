@@ -10,6 +10,10 @@
 */5 * * * * /usr/local/bin/check-plugin-updates.sh
 */5 * * * * /usr/local/bin/user-sync.sh
 
+# ─── Log cleanup ─────────────────────────────────────────────────────────────
+# Compress logs older than 24h; delete logs older than 7 days.
+0 3 * * * /usr/local/bin/log-cleanup.sh
+
 # ─── Facepunch forced wipe ──────────────────────────────────────────────────
 # First Thursday of month, 19:00 London time. Warning sequence starts 60 min
 # before. wipe-check.sh has a dom<=7 guard so non-first Thursdays are skipped.

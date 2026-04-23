@@ -276,8 +276,10 @@ COPY --chown=rustserver:rustserver check-plugin-updates.sh /usr/local/bin/check-
 COPY --chown=rustserver:rustserver wipe-check.sh /usr/local/bin/wipe-check.sh
 COPY --chown=rustserver:rustserver manage-plugin.sh /usr/local/bin/manage-plugin.sh
 COPY --chown=rustserver:rustserver user-sync.sh /usr/local/bin/user-sync.sh
+COPY --chown=rustserver:rustserver log-cleanup.sh /usr/local/bin/log-cleanup.sh
 RUN chmod +x /usr/local/bin/check-plugin-updates.sh /usr/local/bin/wipe-check.sh \
-             /usr/local/bin/manage-plugin.sh /usr/local/bin/user-sync.sh
+             /usr/local/bin/manage-plugin.sh /usr/local/bin/user-sync.sh \
+             /usr/local/bin/log-cleanup.sh
 
 # ─── Startup script ──────────────────────────────────────────────────────────
 COPY --chown=rustserver:rustserver start.sh /start.sh
